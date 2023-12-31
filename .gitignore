@@ -1,0 +1,5 @@
+
+__pycache__/
+data
+*.pickle
+launch.json
