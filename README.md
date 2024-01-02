@@ -26,7 +26,7 @@ pip install -r requirements.txt
 Adjust the necessary paths and perform the following code:
 
 ```
-python run.py -c ./afloc/config.yaml --train
+python train.py -c ./afloc/config.yaml --train
 ```
 
 ## Inference
