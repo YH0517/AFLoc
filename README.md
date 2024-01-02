@@ -1,6 +1,6 @@
 # AFLoc
 
-The code of 'Generalizable vision-language pre-training for annotation-free pathology localization'
+Generalizable vision-language pre-training for annotation-free pathology localization
 
 Some code is borrowed from [GLoRIA](https://github.com/marshuang80/gloria) and [BioViL](https://github.com/microsoft/hi-ml).
 
