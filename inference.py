@@ -42,7 +42,6 @@ class Engine(ImageTextInferenceEngine):
         '''
         return  tel: [word_num, feature_size]
                 teg: [1, feature_size]
-                sts: [word_num]
         '''
         pt = self.model.process_text(query_text, device)
         with torch.no_grad():
@@ -50,8 +49,8 @@ class Engine(ImageTextInferenceEngine):
                     pt["caption_ids"].to(device),
                     pt["attention_mask"].to(device),
                     pt["token_type_ids"].to(device))
-        tel, teg, sts = res["word_embeddings"], res["sent_embeddings"], res["sents"]
-        emb = {"tel": tel, "teg": teg, "sts": sts, "text_mask": pt["attention_mask"]}
+        tel, teg = res["word_embeddings"], res["report_embeddings"]
+        emb = {"tel": tel, "teg": teg}
         return emb
 
 
@@ -73,7 +72,7 @@ def main(**kwargs):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt_dir", "-d", type=str, default="model")
+    parser.add_argument("--ckpt_dir", "-d", type=str, default="pretrained")
     parser.add_argument("--dataset", "-ds", type=str, default="MS_CXR")
     parser.add_argument("--redo", "-r", action='store_true', default=False)
     parser.add_argument('--gpu', type=str, default='5', help='gpu')

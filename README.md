@@ -2,7 +2,7 @@
 
 The code of 'Generalizable vision-language pre-training for annotation-free pathology localization'
 
-Some code is borrowed from GLoRIA and BioViL.
+Some code is borrowed from [GLoRIA](https://github.com/marshuang80/gloria) and [BioViL](https://github.com/microsoft/hi-ml).
 
 ## Environmental preparation
 
@@ -30,6 +30,8 @@ python run.py -c ./afloc/mimic_pretrain_config.yaml --train
 ```
 
 ## Inference
+
+Download the [pre-trained weight](https://drive.google.com/drive/folders/1RQktI5NN-vd1-xVnt3DDPI9hl3eUxzpq) and place it in the ./pretrained folder
 
 We use MS-CXR as an example:
 
