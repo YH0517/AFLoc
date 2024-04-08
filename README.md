@@ -21,6 +21,14 @@ pip install -r requirements.txt
 - [RSNA Pneumonia](https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge)
 - [MS-CXR](https://aka.ms/ms-cxr)
 
+## Preprocess
+Download the [necessary files](https://drive.google.com/drive/folders/1RQktI5NN-vd1-xVnt3DDPI9hl3eUxzpq) and perform the following code:
+
+```
+python preprocess/resize.py
+python preprocess/preprocess.py
+```
+
 ## Pretraining
 
 Adjust the necessary paths and perform the following code:
