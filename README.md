@@ -16,19 +16,13 @@ Defining pathologies automatically from medical images aids the understanding of
     <a href="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/fig1.jpg"></a>
 </div>
 
-
-
  **Quantatitive pathological lesions localization results**
 
-<div align="center">
-    <a href="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/results_cxr.jpg"></a>
-</div>
+<img src="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/results_cxr.png" width="50%" />
 
 **Visualizations of pathological lesions localization**
 
-<div align="center">
-    <a href="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/viz_cxr.jpg"></a>
-</div>
+<img src="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/viz_cxr.png" width="50%" />
 
 ## Links to download datasets
 
