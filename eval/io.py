@@ -12,17 +12,16 @@ from PIL import Image
 import SimpleITK as sitk
 from skimage import io
 
-
 def remap_to_uint8(array: np.ndarray, percentiles: Optional[Tuple[float, float]] = None) -> np.ndarray:
     """Remap values in input so the output range is :math:`[0, 255]`.
 
-    Percentiles can be used to specify the range of values to remap.
-    This is useful to discard outliers in the input data.
+    Inputs:
+        - array: Input array.
+        - percentiles: Percentiles of the input values that will be mapped to ``0`` and ``255``.
+            Passing ``None`` is equivalent to using percentiles ``(0, 100)`` (but faster).
 
-    :param array: Input array.
-    :param percentiles: Percentiles of the input values that will be mapped to ``0`` and ``255``.
-        Passing ``None`` is equivalent to using percentiles ``(0, 100)`` (but faster).
-    :returns: Array with ``0`` and ``255`` as minimum and maximum values.
+    Returns:
+        - Array with ``0`` and ``255`` as minimum and maximum values.
     """
     array = array.astype(float)
     if percentiles is not None:
@@ -42,14 +41,14 @@ def remap_to_uint8(array: np.ndarray, percentiles: Optional[Tuple[float, float]]
     array *= 255
     return array.astype(np.uint8)
 
-
 def load_image(path: Path) -> Image.Image:
     """Load an image from disk.
 
-    The image values are remapped to :math:`[0, 255]` and cast to 8-bit unsigned integers.
+    Inputs:
+        - path: Path to image.
 
-    :param path: Path to image.
-    :returns: Image as ``Pillow`` ``Image``.
+    Returns:
+        - Image as ``Pillow`` ``Image``.
     """
     # Although ITK supports JPEG and PNG, we use Pillow for consistency with older trained models
     if path.suffix in [".jpg", ".jpeg", ".png"]:

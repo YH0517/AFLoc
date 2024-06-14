@@ -16,6 +16,11 @@ import torch.nn.functional as F
 
 
 class AFLoc(nn.Module):
+    """
+    AFLoc: Multi-modal vision-language model for generalizable annotation-free 
+    pathological lesions localization and clinical diagnosis
+    """
+
     def __init__(self, cfg):
         super(AFLoc, self).__init__()
 
@@ -35,21 +40,64 @@ class AFLoc(nn.Module):
         self.ixtoword = {v: k for k, v in self.tokenizer.get_vocab().items()}
 
     def text_encoder_forward(self, caption_ids, attention_mask, token_type_ids):
+        """
+        Forward pass for the text encoder
+
+        Inputs:
+            caption_ids (torch.Tensor): tokenized caption
+            attention_mask (torch.Tensor): attention mask
+            token_type_ids (torch.Tensor): token type ids
+
+        Returns:
+            res (dict): 
+            - word_embeddings (torch.Tensor): word-level embeddings
+            - report_embeddings (torch.Tensor): report-level embeddings
+            - sent_embeddings (torch.Tensor): sentence-level embeddings
+            - report (list): text report
+            - sent_units_report (list): an auxiliary sentence list
+        """
         res = self.text_encoder(
             caption_ids, attention_mask, token_type_ids
         )
         return res
 
     def image_encoder_forward(self, imgs):
+        """
+        Forward pass for the image encoder
+
+        Inputs: 
+            imgs (torch.Tensor): input images (batch_size, channel, height, width)
+
+        Returns:
+            img_emb_l (torch.Tensor): local image embeddings (batch_size, 768, 19, 19)
+            img_emb_l2 (torch.Tensor): local image embeddings 2 (batch_size, 768, 38, 38)
+            img_emb_lf (torch.Tensor): local image embeddings final (batch_size, 768, 10, 10)
+            img_emb_g (torch.Tensor): global image embeddings (batch_size, 768)
+        """
+        # get image features
         img_feat_g, img_feat_l, img_feat_l2, img_feat_lf = self.img_encoder(imgs, get_local=True)  # [b, 2048] [b, 1024, 19, 19]
+        # map image features to the same dimension of text embeddings.
         img_emb_g, img_emb_l, img_emb_l2, img_emb_lf = self.img_encoder.generate_embeddings(
             img_feat_g, img_feat_l, img_feat_l2, img_feat_lf
         )  
 
         return img_emb_l, img_emb_l2, img_emb_lf, img_emb_g
-    
 
     def _calc_local_loss(self, img_emb_l, text_emb_w, report, weight_matrix=None):
+        """
+        Calculate local loss
+
+        Inputs:
+            img_emb_l (torch.Tensor): local image embeddings (batch_size, 768, height, witdh)
+            text_emb_w (torch.Tensor): word-level text embeddings (batch_size, 768, max_length)
+            report (list): text report
+            weight_matrix (torch.Tensor): weight matrix for loss
+
+        Returns:
+            l_loss0 (torch.Tensor): image-text local loss
+            l_loss1 (torch.Tensor): text-image local loss
+            attn_maps (list): attention maps for text-image alignment
+        """
 
         cap_lens = [
             len([w for w in sent if not w.startswith("[")]) + 1 for sent in report
@@ -63,29 +111,61 @@ class AFLoc(nn.Module):
             temp3=self.temp3,
             weight_matrix=weight_matrix,
         )
+
         return l_loss0, l_loss1, attn_maps
-    
 
     def _calc_global_loss(self, img_emb_g, text_emb_r, weight_matrix=None):
+        """
+        Calculate global loss
+
+        Inputs:
+            img_emb_g (torch.Tensor): global image embeddings (batch_size, 768)
+            text_emb_r (torch.Tensor): report-level text embeddings (batch_size, 768)
+            weight_matrix (torch.Tensor): weight matrix for loss
+
+        Returns:
+            lgr_0 (torch.Tensor): image-text global loss
+            lgr_1 (torch.Tensor): text-image global loss
+            matrix_cosine (torch.Tensor): global similarity scores
+        """
         lgr_0, lgr_1, matrix_cosine = self.global_loss(img_emb_g, text_emb_r, temp3=self.temp3, weight_matrix=weight_matrix)
         return lgr_0, lgr_1, matrix_cosine
 
     def calc_loss(self, output, batch):
-        img_emb_l = output["img_emb_l"]
-        img_emb_l2 = output["img_emb_l2"]
-        img_emb_g = output["img_emb_g"]
-        text_emb_w = output["text_emb_w"]
-        text_emb_r = output["text_emb_r"]
-        report = output["report"]
-        text_emb_s = output["text_emb_s"]
-        sent_units_report = output["sent_units_report"]
+        """
+        Calculate loss
 
+        Inputs:
+            output (dict): model output
+            batch (dict): batch data
+        
+        Returns:
+            res (dict):
+            - loss (torch.Tensor): total loss
+            - global_report_loss (torch.Tensor): global report loss
+            - local_sent_loss (torch.Tensor): local sentence loss
+            - local_word_loss (torch.Tensor): local word loss
+            - attn_maps_sent (list): attention maps for sentence alignment
+            - report (list): text report
+            - sent_units_report (list): an auxiliary sentence list
+        """
+        
+        img_emb_l = output["img_emb_l"]  # local image embeddings (batch_size, 768, 19, 19)
+        img_emb_l2 = output["img_emb_l2"]  # local image embeddings 2 (batch_size, 768, 38, 38)
+        img_emb_g = output["img_emb_g"]  # global image embeddings (batch_size, 768)
+        text_emb_w = output["text_emb_w"]  # word-level text embeddings (batch_size, 768, max_length)
+        text_emb_r = output["text_emb_r"]  # report-level text embeddings (batch_size, 768)
+        report = output["report"]  # text report
+        text_emb_s = output["text_emb_s"]  # sentence-level text embeddings (batch_size, 768, num_sentences)
+        sent_units_report = output["sent_units_report"]  # auxiliary sentence list
+
+        # global-level loss
         if self.cfg.model.afloc.use_global_report_loss:
             lgr_0, lgr_1, matrix_cosine = self._calc_global_loss(img_emb_g, text_emb_r)
         else:
             lgr_0, lgr_1, matrix_cosine = 0, 0, None
         
-
+        # report-level loss
         if self.cfg.model.afloc.use_local_sent_loss:
             lds_0, lds_1, attn_maps_sent = self._calc_local_loss(
                 img_emb_l, text_emb_s, sent_units_report
@@ -93,7 +173,7 @@ class AFLoc(nn.Module):
         else:
             lds_0, lds_1, attn_maps_sent = 0, 0, None
 
-
+        # word-level loss
         if self.cfg.model.afloc.use_local_word_loss:
             lsw_0, lsw_1, attn_maps2 = self._calc_local_loss(
                 img_emb_l2, text_emb_w, report
@@ -104,10 +184,11 @@ class AFLoc(nn.Module):
         # weighted loss
         lgr = (lgr_0 + lgr_1) * self.cfg.model.afloc.global_report_loss_weight
         lds = (lds_0 + lds_1) * self.cfg.model.afloc.local_sent_loss_weight
-
         lsw = (lsw_0 + lsw_1) * self.cfg.model.afloc.local_word_loss_weight
 
+        # total loss
         tl = lgr + lds + lsw
+
         res = {
             "loss": tl,
             "global_report_loss": lgr,
@@ -120,6 +201,24 @@ class AFLoc(nn.Module):
         return res
 
     def forward(self, x):
+        """
+        Forward pass
+
+        Inputs:
+            x (dict): input data
+
+        Returns:
+            res (dict): model output
+            - img_emb_l (torch.Tensor): local image embeddings (batch_size, 768, 19, 19)
+            - img_emb_l2 (torch.Tensor): local image embeddings 2 (batch_size, 768, 38, 38)
+            - img_emb_lf (torch.Tensor): local image embeddings final (batch_size, 768, 10, 10)
+            - img_emb_g (torch.Tensor): global image embeddings (batch_size, 768)
+            - text_emb_w (torch.Tensor): word-level text embeddings (batch_size, 768, max_length)
+            - text_emb_r (torch.Tensor): report-level text embeddings (batch_size, 768)
+            - text_emb_s (torch.Tensor): sentence-level text embeddings (batch_size, 768, num_sentences)
+            - report (list): text report
+            - sent_units_report (list): an auxiliary sentence list
+        """
 
         # img encoder branch
         img_emb_l, img_emb_l2, img_emb_lf, img_emb_g = self.image_encoder_forward(x["imgs"])
@@ -142,6 +241,20 @@ class AFLoc(nn.Module):
         return res
 
     def process_text(self, text, device):
+        """
+        Process text data into tokenized format
+
+        Inputs:
+            text (str): input text
+            device (torch.device): device to use
+
+        Returns:
+            res (dict): processed text data
+            - caption_ids (torch.Tensor): tokenized ids
+            - attention_mask (torch.Tensor): attention mask
+            - token_type_ids (torch.Tensor): token type ids
+            - cap_lens (list): caption lengths
+        """
 
         if type(text) == str:
             text = [text]
@@ -218,7 +331,17 @@ class AFLoc(nn.Module):
 
 
     def process_img(self, paths, device, equalize_hist=False):
+        """
+        Process image data
 
+        Inputs:
+            paths (list): list of image paths
+            device (torch.device): device to use
+            equalize_hist (bool): whether to apply histogram equalization
+
+        Returns:
+            all_imgs (torch.Tensor): processed image data
+        """
         transform = builder.build_transformation(self.cfg, split="test")
 
         if type(paths) == str:
@@ -246,7 +369,8 @@ class AFLoc(nn.Module):
 
     def _resize_img(self, img, scale):
         """
-        Args:
+        Resize and pad image
+        Inputs:
             img - image as numpy array (cv2)
             scale - desired output image-size as scale x scale
         Return:

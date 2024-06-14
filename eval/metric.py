@@ -2,8 +2,19 @@ import numpy as np
 from eval.utils import norm_heatmap
 
 
-# compute IOU
 def compute_iou(gtmask_, premask_, nan, only_pos=True):
+    """
+    Compute IOU between ground truth mask and predicted mask.
+
+    Inputs:
+        - gtmask_ (np.ndarray): shape=(H, W), ground truth mask
+        - premask_ (np.ndarray): shape=(H, W), predicted mask
+        - nan (np.ndarray): shape=(H, W), True if the pixel is NaN
+        - only_pos (bool): if True, compute IOU only for positive pixels
+
+    Returns:
+        - iou_score (float): IOU score
+    """
     gtmask = gtmask_[~nan]
     premask = premask_[~nan]
     intersection = np.logical_and(gtmask, premask)
@@ -21,9 +32,20 @@ def compute_iou(gtmask_, premask_, nan, only_pos=True):
     return iou_score
 
 
-# For CNR, let A and A_ denote the interior and exterior of the bounding box, respectively.
-# CNR = |meanA - meanA_| / pow((varA_ + varA), 0.5)
 def compute_cnr(gtmask_, heatmap_, nan):
+    """
+    Compute contrast-to-noise ratio (CNR) between ground truth mask and heatmap.
+    For CNR, let A and A_ denote the interior and exterior of the bounding box, respectively.
+    CNR = |meanA - meanA_| / pow((varA_ + varA), 0.5)
+    
+    Inputs:
+        - gtmask_ (np.ndarray): shape=(H, W), ground truth mask
+        - heatmap_ (np.ndarray): shape=(H, W), heatmap
+        - nan (np.ndarray): shape=(H, W), True if the pixel is NaN
+
+    Returns:
+        - CNR (float): contrast-to-noise ratio
+    """
     heatmap = norm_heatmap(heatmap_, nan)
     heatmap_wo_nan = heatmap[~nan]
     gtmask_wo_nan = gtmask_[~nan]

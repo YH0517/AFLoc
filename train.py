@@ -34,7 +34,10 @@ def get_parser():
         required=True,
     )
     parser.add_argument(
-        "--train", action="store_true", default=False, help="specify to train model"
+        "--train", 
+        action="store_true", 
+        default=False, 
+        help="specify to train model"
     )
     parser.add_argument(
         "--test",
@@ -44,11 +47,22 @@ def get_parser():
         "By default run.py trains a model based on config file",
     )
     parser.add_argument(
-        "--ckpt_path", type=str, default=None, help="Checkpoint path for the save model"
+        "--ckpt_path", 
+        type=str, 
+        default=None,
+        help="Checkpoint path for the save model"
     )
-    parser.add_argument("--random_seed", type=int, default=23, help="Random seed")
     parser.add_argument(
-        "--train_pct", type=float, default=1.0, help="Percent of training data"
+        "--random_seed", 
+        type=int, 
+        default=23, 
+        help="Random seed"
+    )
+    parser.add_argument(
+        "--train_pct", 
+        type=float, 
+        default=1.0, 
+        help="Percent of training data"
     )
     parser.add_argument(
         "--splits",
@@ -62,7 +76,6 @@ def get_parser():
         default=None,
         help="Name of trial. Defaults to None",
     )
-
     parser.add_argument(
         "-l",
         "--load_ckpt",
@@ -76,11 +89,13 @@ def get_parser():
 
 
 class MyCallback(Callback):
+
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
+
     def on_init_end(self, trainer):
-        
+        """Create directories and save config."""
         # create directories
         if not os.path.exists(self.cfg.lightning.logger.save_dir):
             os.makedirs(self.cfg.lightning.logger.save_dir)

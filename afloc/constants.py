@@ -11,7 +11,6 @@ PICKLE_SUFFIX = "report"
 MIMIC_DATA_DIR = Path("/mnt/disk2/hwj/MIMIC-DATA-Final/MIMIC-CXR/")
 MIMIC_IMG_DIR = MIMIC_DATA_DIR / "MIMIC-224-inter-area/files/"
 MIMIC_ORIGINAL_TRAIN_CSV = MIMIC_DATA_DIR / "BASE-MIMIC.csv"
-
 MIMIC_MASTER_CSV = MIMIC_DATA_DIR / "BASE-MIMIC.csv"  # contains patient information, not PHI conplient
 
 MIMIC_VALID_NUM = 5000
@@ -55,6 +54,7 @@ TASKS = [
     "Fracture",
     "Support Devices",
 ]
+
 MIMIC_USED_COLS = [
     MIMIC_PATH_COL, 
     MIMIC_VIEW_COL, 

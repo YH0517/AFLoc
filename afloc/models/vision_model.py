@@ -15,16 +15,20 @@ def hook_fn2(module, input, output):
 
 
 class ImageEncoder(nn.Module):
+    """Image encoder of AFLOC."""
+
     def __init__(self, cfg):
         super(ImageEncoder, self).__init__()
         self.cfg = cfg
         self.output_dim = cfg.model.text.embedding_dim
         
+        # create model
         model_function = getattr(cnn_backbones, cfg.model.vision.model_name)
         self.model, self.feature_dim, self.interm_feature_dim = model_function(
             pretrained=cfg.model.vision.pretrained
         )
 
+        # hook for intermediate features
         if "densenet" in self.cfg.model.vision.model_name:
             if self.cfg.model.vision.mode == 1:
                 self.hook_fn1_module = self.model.features.denseblock4.denselayer1.relu1
@@ -45,6 +49,7 @@ class ImageEncoder(nn.Module):
                 self.hook_fn2_module.register_forward_hook(hook_fn2)
                 self.interm_feature_dim = 128
 
+        # embedders for global and local features
         self.global_embedder = nn.Linear(self.feature_dim, self.output_dim)
         self.local_embedder = nn.Conv2d(
             self.interm_feature_dim,
@@ -76,12 +81,27 @@ class ImageEncoder(nn.Module):
 
         self.pool = nn.AdaptiveAvgPool2d(output_size=(1, 1))
 
+        # freeze the CNN model
         if cfg.model.vision.freeze_cnn:
             print("Freezing CNN model")
             for param in self.model.parameters():
                 param.requires_grad = False
 
     def forward(self, x, get_local=False):
+        """
+        Forward pass.
+        
+        Inputs:
+            x: input image tensor
+            get_local: whether to return local features
+
+        Returns:
+            global_ft (torch.Tensor): global features
+            local_ft (torch.Tensor): local features
+            local_ft2 (torch.Tensor): local features 2
+            local_ftf (torch.Tensor): local features final
+        """
+
         # --> fixed-size input: batch x 3 x 299 x 299
         if "resnet" in self.cfg.model.vision.model_name or "resnext" in self.cfg.model.vision.model_name:
             global_ft, local_ft, local_ft2, local_ftf = self.resnet_forward(x, extract_features=True)
@@ -94,6 +114,21 @@ class ImageEncoder(nn.Module):
             return global_ft
 
     def generate_embeddings(self, global_features, local_features, local_features2, local_features_final):
+        """
+        Map image features to the same dimension of text embeddings.
+
+        Inputs:
+            global_features (torch.Tensor): global features
+            local_features (torch.Tensor): local features
+            local_features2 (torch.Tensor): local features 2
+            local_features_final (torch.Tensor): local features final
+
+        Returns:
+            global_emb (torch.Tensor): global embeddings
+            local_emb (torch.Tensor): local embeddings
+            local_emb2 (torch.Tensor): local embeddings 2
+            local_embf (torch.Tensor): local embeddings final
+        """
 
         global_emb = self.global_embedder(global_features)
         local_emb = self.local_embedder(local_features)
@@ -103,9 +138,23 @@ class ImageEncoder(nn.Module):
             local_emb2 = self.local2_embedder(local_features2)
         if self.cfg.model.afloc.use_ce_loss:
             local_embf = self.local_f_embedder(local_features_final)
+
         return global_emb, local_emb, local_emb2, local_embf
 
     def resnet_forward(self, x, extract_features=False):
+        """
+        Forward pass for ResNet models.
+
+        Inputs:
+            x (torch.Tensor): batch of images (batch_size, channel, height, width)
+            extract_features (bool): whether to extract features
+
+        Returns:
+            x (torch.Tensor): global features (batch_size, 512)
+            local_features (torch.Tensor): local features (batch_size, 256, 19, 19)
+            local_features2 (torch.Tensor): local features 2 (batch_size, 128, 38, 38)
+            local_features_final (torch.Tensor): local features final (batch_size, 512, 10, 10)
+        """
 
         # --> fixed-size input: batch x 3 x 299 x 299
         x = nn.Upsample(size=(299, 299), mode="bilinear", align_corners=True)(x)
@@ -129,6 +178,19 @@ class ImageEncoder(nn.Module):
         return x, local_features, local_features2, local_features_final
 
     def densenet_forward(self, x, extract_features=False):
+        """
+        Forward pass for DenseNet models.
+
+        Inputs:
+            x (torch.Tensor): batch of images (batch_size, 3, height, width)
+            extract_features (bool): whether to extract features
+
+        Returns:
+            x (torch.Tensor): global features (batch_size, 512)
+            local_features (torch.Tensor): local features (batch_size, 256, 19, 19)
+            local_features2 (torch.Tensor): local features 2 (batch_size, 128, 38, 38)
+        """
+
         # --> fixed-size input: batch x 3 x 299 x 299
         x = nn.Upsample(size=(299, 299), mode="bilinear", align_corners=True)(x)
         x = self.model.features(x)
@@ -139,7 +201,6 @@ class ImageEncoder(nn.Module):
         local_features2 = self.hook_fn2_module.hook_fn2_output
 
         return x, local_features, local_features2
-
 
     def init_trainable_weights(self):
         initrange = 0.1

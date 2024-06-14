@@ -6,12 +6,16 @@ from pytorch_lightning.core import LightningModule
 
 
 class PretrainModel(LightningModule):
+    """
+    Pytorch Lightning Module for pretraining.
+    """
+
     def __init__(self, cfg):
         super().__init__()
-
+        
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
-        # load checkpoint
+        # load model
         if self.cfg.train.load_ckpt is not None:
             self.afloc = builder.build_model_from_ckpt(self.cfg.train.load_ckpt)
         else:
@@ -22,26 +26,30 @@ class PretrainModel(LightningModule):
         
 
     def configure_optimizers(self):
+        """Configure the optimizer and learning rate scheduler."""
         optimizer = builder.build_optimizer(self.cfg, self.lr, self.afloc)
         scheduler = builder.build_scheduler(self.cfg, optimizer, self.dm)
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def training_step(self, batch, batch_idx):
+        """Perform a training step."""
         res = self.shared_step(batch, "train")
         loss = res["loss"]
 
         return loss
 
     def validation_step(self, batch, batch_idx):
+        """Perform a validation step."""
         res = self.shared_step(batch, "val")
         loss = res["loss"]
         return loss
 
     def test_step(self, batch, batch_idx):
+        """Perform a test step."""
         res = self.shared_step(batch, "test")
 
     def shared_step(self, batch, split):
-        """Similar to traning step"""
+        """forward pass and calculate loss."""
         output = self.afloc(batch)
 
         loss = self.afloc.calc_loss(output, batch)

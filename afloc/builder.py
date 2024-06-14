@@ -13,32 +13,46 @@ def load_model(
     device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu",
     from_pretrained: bool = False,
 ):
+    """Loads the model from checkpoint file."""
+    # Load the checkpoint
     ckpt = torch.load(ckpt_path, map_location=device)
     cfg = ckpt["hyper_parameters"]
     ckpt_dict = ckpt["state_dict"]
 
+    # Fix the keys in the checkpoint dictionary
     fixed_ckpt_dict = {}
     for k, v in ckpt_dict.items():
         new_key = k.split("afloc.")[-1]
         fixed_ckpt_dict[new_key] = v
     ckpt_dict = fixed_ckpt_dict
+
+    # Build the model
     model = build_model(cfg).to(device)
+
     if from_pretrained:
         return model
+
+    # Load the state dictionary into the model
     model.load_state_dict(ckpt_dict)
+
     return model
 
 
-
 def build_data_module(cfg):
+    """Build the data module for lightning."""
+    # Check the phase to determine which data module to use
     if cfg.phase.lower() == "pretrain":
         data_module = datasets.DATA_MODULES["pretrain"]
     else:
+        # Use the data module specified in the configuration
         data_module = datasets.DATA_MODULES[cfg.data.dataset.lower()]
+
+    # Return the built data module
     return data_module(cfg)
 
 
 def build_lightning_model(cfg, dm):
+    """Build the lightning model"""
     module = lightning.LIGHTNING_MODULES[cfg.phase.lower()]
     module = module(cfg)
     module.dm = dm
@@ -46,6 +60,8 @@ def build_lightning_model(cfg, dm):
 
 
 def build_model(cfg):
+    """Build the AFLoc model."""
+    
     if cfg.phase.lower() == "pretrain":
         model = models.afloc_model.AFLoc(cfg)
 
@@ -53,7 +69,7 @@ def build_model(cfg):
 
 
 def build_model_from_ckpt(ckpt):
-
+    """Build the AFLoc model from the checkpoint file."""
     ckpt = torch.load(ckpt)
     cfg = ckpt["hyper_parameters"]
     ckpt_dict = ckpt["state_dict"]
@@ -71,20 +87,23 @@ def build_model_from_ckpt(ckpt):
 
 
 def build_img_model(cfg):
+    """Build the image model."""
     image_model = models.IMAGE_MODELS[cfg.phase.lower()]
     return image_model(cfg)
 
 
 def build_text_model(cfg):
+    """Build the text model."""
     return models.text_model.BertEncoder(cfg)
 
 
 def build_decoder(cfg):
+    """Build the decoder."""
     return models.decoder_model.Classifier()
 
 
 def build_optimizer(cfg, lr, model):
-
+    """Build the optimizer."""
     # get params for optimization
     params = []
     for p in model.parameters():
@@ -110,7 +129,7 @@ def build_optimizer(cfg, lr, model):
 
 
 def build_scheduler(cfg, optimizer, dm=None):
-
+    """Build the lr scheduler."""
     if cfg.train.scheduler.name == "warmup":
 
         def lambda_lr(epoch):
@@ -146,6 +165,7 @@ def build_scheduler(cfg, optimizer, dm=None):
 
 
 def build_transformation(cfg, split):
+    """Build the data augmentation for images."""
     t = []
     if split == "train":
         if cfg.transforms.center_crop is not None:

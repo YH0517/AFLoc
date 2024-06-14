@@ -13,11 +13,13 @@ matplotlib.use('Agg')
 
 
 class Engine(ImageTextInferenceEngine):
+    """Engine for inference."""
 
     def __init__(self) -> None:
         super().__init__()
 
     def load_model(self, **kwargs):
+        """Load the model."""
         import afloc
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = afloc.builder.load_model(ckpt_path=kwargs["ckpt"], device=device)
@@ -27,10 +29,18 @@ class Engine(ImageTextInferenceEngine):
         self.model.cfg.data.image.imsize = 224
         
     def get_img_emb(self, image_path: Path, device):
-        '''
-        return  iel: [h, w, feature_size]
-                ieg: [1, feature_size]
-        '''
+        """
+        Get image embeddings.
+
+        Inputs:
+            - image_path (Path): path to image
+            - device (torch.device): device
+
+        Returns:
+            - emb (dict): embeddings
+                - iel (torch.Tensor): image embeddings local (h, w, feature_size)
+                - ieg (torch.Tensor): image embeddings global (1, feature_size)
+        """
         pi = self.model.process_img([image_path], device, equalize_hist=False)
         with torch.no_grad():
             iel, _, _, ieg = self.image_inference_engine(pi.to(device))
@@ -39,10 +49,18 @@ class Engine(ImageTextInferenceEngine):
         return emb
     
     def get_text_emb(self, query_text: str, device):
-        '''
-        return  tel: [word_num, feature_size]
-                teg: [1, feature_size]
-        '''
+        """
+        Get text embeddings.
+
+        Inputs:
+            - query_text (str): query text
+            - device (torch.device): device
+
+        Returns:
+            - emb (dict): embeddings
+                - tel (torch.Tensor): text embeddings local (word_num, feature_size)
+                - teg (torch.Tensor): text embeddings global (1, feature_size)
+        """
         pt = self.model.process_text(query_text, device)
         with torch.no_grad():
             res = self.text_inference_engine(

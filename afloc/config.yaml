@@ -1,7 +1,6 @@
 experiment_name: 'AFLoc_pretrain'
 trial_name: 
 phase: 'pretrain'
-
 lightning:
     trainer:
        gpus: '0,1'
@@ -28,7 +27,6 @@ lightning:
         logger_type: 'WandbLogger'
         save_dir: './data/'
         project: 'AFLoc'
-
 model:
     norm: false
     afloc: 
@@ -71,7 +69,6 @@ data:
       random_num: true
     image:
         imsize: 256
-
 transforms: 
     use_medklip: false
     norm: 'half'
@@ -79,7 +76,6 @@ transforms:
         crop_size: 224
     random_crop:
         crop_size: 224
-
 train: 
     update_interval: 1000
     batch_size: 128
@@ -97,6 +93,5 @@ train:
         step_size: 1
         gamma: 0.9
     seeds: [1, 2]
-    
 test:
     update_interval: 1

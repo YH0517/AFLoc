@@ -6,11 +6,15 @@ import os
 def box_transfer(box, w, h, scale):
     """
     Transfer the box from the original image to the resized image
-    :param box: box in the original image (x, y, w, h)
-    :param w: width of the original image
-    :param h: height of the original image
-    :param scale: the scale of the resized image
-    :return: box in the resized image
+
+    Inputs:
+        - box (np.ndarray): box in the original image (x, y, w, h)
+        - w (int): width of the original image
+        - h (int): height of the original image
+        - scale (int): the scale of the resized image
+
+    Returns:
+        - box (np.ndarray): box in the resized image
     """
     size = (h, w)
     max_dim = max(size)
@@ -58,10 +62,14 @@ def box_transfer(box, w, h, scale):
 def box2mask(box, w, h):
     """
     Transfer the box to mask
-    :param box: box in the original image (x, y, w, h)
-    :param w: width of the original image
-    :param h: height of the original image
-    :return: mask in the original image
+
+    Inputs:
+        - box (np.ndarray): box in the resized image (x, y, w, h)
+        - w (int): width of the resized image
+        - h (int): height of the resized image
+
+    Returns:
+        - mask (np.ndarray): mask in the resized image
     """
     mask = np.zeros((h, w), dtype=np.uint8)
     mask[box[1]:box[1]+box[3], box[0]:box[0]+box[2]] = 1

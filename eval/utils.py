@@ -27,8 +27,19 @@ TypeArrayImage = Union[np.ndarray, Image.Image]
 
 
 def norm_heatmap(heatmap_, nan, mode=0):
-    # mode: 0 -> "[-1,1]"
-    #       1 -> "[0, 1]"
+    """
+    Normalize heatmap to [-1, 1] or [0, 1]
+    
+    Inputs:
+        - heatmap_ (np.ndarray): shape=(H, W)
+        - nan (np.ndarray): shape=(H, W), True if the pixel is NaN
+        - mode: int, 0 or 1
+            - 0 -> "[-1,1]"
+            - 1 -> "[0,1]"
+    
+    Returns:
+        - heatmap (np.ndarray): normalized heatmap, shape=(H, W)
+    """
     heatmap = copy.deepcopy(heatmap_)
     heatmap_wo_nan = heatmap[~nan]
 
@@ -45,6 +56,7 @@ def norm_heatmap(heatmap_, nan, mode=0):
 
 
 def load_data(dataset, **kwargs):
+    """Load dataset"""
     if dataset == "MS_CXR":
         return load_ms_cxr(**kwargs)
     else:
@@ -52,31 +64,31 @@ def load_data(dataset, **kwargs):
 
 
 def load_ms_cxr(use_cxr_text=True, **kwargs):
+    """Load MS-CXR dataset"""
     print("loading data...")
-    
     data = get_annotation(MS_CXR_JSON, use_cxr_text=use_cxr_text)
     data["path"] = list(map(lambda x: MIMIC_IMG_DIR/x.replace("files/", ""), data["path"]))
-
     return data
 
 
 def rle2mask(rle, width, height):
-        """Run length encoding to segmentation mask"""
+    """Run length encoding to segmentation mask"""
 
-        mask = np.zeros(width * height)
-        array = np.asarray([int(x) for x in rle.split()])
-        starts = array[0::2]
-        lengths = array[1::2]
-        current_position = 0
-        for index, start in enumerate(starts):
-            current_position += start
-            mask[current_position:current_position + lengths[index]] = 1
-            current_position += lengths[index]
+    mask = np.zeros(width * height)
+    array = np.asarray([int(x) for x in rle.split()])
+    starts = array[0::2]
+    lengths = array[1::2]
+    current_position = 0
+    for index, start in enumerate(starts):
+        current_position += start
+        mask[current_position:current_position + lengths[index]] = 1
+        current_position += lengths[index]
 
-        return mask.reshape(width, height).T
+    return mask.reshape(width, height).T
 
 
 def get_annotation(path_to_json, scale=224, use_cxr_text=True):
+    """Get annotations from json file"""
     coco = COCO(annotation_file=path_to_json)
     cats = coco.cats
     merged = {}
@@ -134,7 +146,7 @@ def get_annotation(path_to_json, scale=224, use_cxr_text=True):
 
 
 def read_from_dicom(img_path):
-
+    """Read dicom image and return PIL image"""
     dcm = pydicom.read_file(img_path, force=True)
     x = dcm.pixel_array
     x = cv2.convertScaleAbs(x, alpha=(255.0 / x.max()))

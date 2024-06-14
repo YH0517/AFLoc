@@ -7,6 +7,10 @@ from .. import builder
 
 
 class PretrainingDataModule(pl.LightningDataModule):
+    """
+    LightningDataModule for pretraining data.
+    """
+
     def __init__(self, cfg):
         super().__init__()
 
@@ -14,14 +18,18 @@ class PretrainingDataModule(pl.LightningDataModule):
 
         self.dataset = pretraining_dataset.MultimodalPretrainingDataset
         self.collate_fn = pretraining_dataset.multimodal_collate_fn
+
+        # batch size
         if self.cfg.lightning.trainer.accelerator == "ddp":
             self.batch_size = self.cfg.train.per_gpu_batchsize
         else:
             self.batch_size = self.cfg.train.batch_size
+
         self.pin_memory = False
         print("batch size: ", self.batch_size)
 
     def train_dataloader(self):
+        """Returns the dataloader for training data."""
         transform = builder.build_transformation(self.cfg, "train")
         dataset = self.dataset(self.cfg, split="train", transform=transform)
         return DataLoader(
@@ -35,6 +43,7 @@ class PretrainingDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self):
+        """Returns the dataloader for validation data."""
         transform = builder.build_transformation(self.cfg, "test")
         dataset = self.dataset(self.cfg, split="validate", transform=transform)
         return DataLoader(
@@ -48,6 +57,7 @@ class PretrainingDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self):
+        """Returns the dataloader for test data."""
         transform = builder.build_transformation(self.cfg, "test")
         dataset = self.dataset(self.cfg, split="test", transform=transform)
         return DataLoader(

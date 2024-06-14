@@ -5,6 +5,7 @@ import numpy as np
 
 
 class BertEncoder(nn.Module):
+    """Text encoder of AFLoc."""
     def __init__(self, cfg):
         super(BertEncoder, self).__init__()
 
@@ -32,7 +33,17 @@ class BertEncoder(nn.Module):
                 param.requires_grad = False
 
     def aggregate_tokens(self, embeddings, caption_ids):
+        """
+        Aggregate token-level embeddings to word-level embeddings
 
+        Inputs:
+            embeddings (torch.Tensor): token-level embeddings
+            caption_ids (torch.Tensor): token ids
+
+        Returns:
+            agg_embs_batch (torch.Tensor): word-level embeddings
+            sentences (list): text report
+        """
         batch_size, num_layers, num_words, dim = embeddings.shape
         embeddings = embeddings.permute(0, 2, 1, 3)
         agg_embs_batch = []
@@ -95,10 +106,26 @@ class BertEncoder(nn.Module):
         return agg_embs_batch, sentences
 
     def forward(self, ids, attn_mask, token_type):
+        """
+        Forward pass of the text model
+
+        Inputs:
+            ids (torch.Tensor): input ids
+            attn_mask (torch.Tensor): attention mask
+            token_type (torch.Tensor): token type
+
+        Returns:
+            res (dict): 
+            - word_embeddings (torch.Tensor): word-level embeddings
+            - report_embeddings (torch.Tensor): report-level embeddings
+            - sent_embeddings (torch.Tensor): sentence-level embeddings
+            - report (list): text report
+            - sent_units_report (list): an auxiliary sentence list
+        """
 
         outputs = self.model(ids, attn_mask, token_type)
 
-        # aggregate intermetidate layers
+        # aggregate intermetidate layer's embeddings
         if self.last_n_layers > 1:
             all_embeddings = outputs[2] 
             embeddings = torch.stack(
@@ -131,10 +158,11 @@ class BertEncoder(nn.Module):
                 print(self.aggregate_method)
                 raise Exception("Aggregation method not implemented")
 
-        # use last layer
+        # use last layer's embeddings
         else:
             word_embeddings, report_embeddings = outputs[0], outputs[1]
 
+        # project word embeddings from (batch_dim, num_words, feat_dim) to (batch_dim, embedding_dim, num_words)
         batch_dim, num_words, feat_dim = word_embeddings.shape
         word_embeddings = word_embeddings.view(batch_dim * num_words, feat_dim)
         if self.emb_local is not None:
@@ -142,6 +170,7 @@ class BertEncoder(nn.Module):
         word_embeddings = word_embeddings.view(batch_dim, num_words, self.embedding_dim)
         word_embeddings = word_embeddings.permute(0, 2, 1)
 
+        # project sent embeddings from (batch_dim, num_words, feat_dim) to (batch_dim, embedding_dim, num_words)
         if self.take_sent_as_units:
             batch_dim, num_words, feat_dim = sent_embeddings.shape
             sent_embeddings = sent_embeddings.view(batch_dim * num_words, feat_dim)
@@ -150,9 +179,11 @@ class BertEncoder(nn.Module):
             sent_embeddings = sent_embeddings.view(batch_dim, num_words, self.embedding_dim)
             sent_embeddings = sent_embeddings.permute(0, 2, 1)
 
+        # project report embeddings
         if self.emb_global is not None:
             report_embeddings = self.emb_global(report_embeddings)
 
+        # normalize embeddings
         if self.norm is True:
             word_embeddings = word_embeddings / torch.norm(
                 word_embeddings, 2, dim=1, keepdim=True
@@ -175,7 +206,17 @@ class BertEncoder(nn.Module):
         return res
 
     def aggregate_tokens_sent_as_units(self, embeddings, report):
+        """
+        Aggregate token-level embeddings to sentence-level embeddings
+
+        Inputs:
+            embeddings (torch.Tensor): token-level embeddings
+            report (list): text report
             
+        Returns:
+            agg_embs_batch (torch.Tensor): sentence-level embeddings
+            sentences (list): an auxiliary sentence list
+        """
         batch_size, num_layers, num_words, dim = embeddings.shape
         embeddings = embeddings.permute(0, 2, 1, 3)
         agg_embs_batch = []

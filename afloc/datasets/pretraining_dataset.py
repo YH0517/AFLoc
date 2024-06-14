@@ -18,7 +18,17 @@ from skimage import exposure
 
 
 class MultimodalPretrainingDataset(data.Dataset):
+
     def __init__(self, cfg, split="train", transform=None):
+        """
+        A PyTorch dataset for multimodal pretraining.
+
+        Args:
+            cfg (object): The configuration object.
+            split (str, optional): The split of the dataset (default: "train").
+            transform (object, optional): Data augmentation for images (default: None).
+
+        """
 
         self.cfg = cfg
         self.transform = transform
@@ -50,7 +60,13 @@ class MultimodalPretrainingDataset(data.Dataset):
         self.split = split
 
     def precess_missing_values(self, mode=None):
-        # impute missing values 
+        """
+        Impute missing values in the df.
+
+        Args:
+            mode (int): The mode for handling missing values.
+
+        """
         if mode == 0:
             print("missing_values mode 0")
             for col in TASKS:
@@ -72,14 +88,28 @@ class MultimodalPretrainingDataset(data.Dataset):
                 self.df[col].replace(-2, 0, inplace=True)
         else:
             raise NotImplementedError
+        
         self.df[TASKS] = self.df[TASKS].astype(float)
 
     def load_text_data(self, split, view, dataset):
+        """
+        Load text data for a given split, view, and dataset.
 
+        Args:
+            split (str): The split of the data (e.g., "train", "val", "test").
+            view (str): The view of the data (e.g., "full", "frontal", "lateral").
+            dataset (str): The dataset name.
+
+        Returns:
+            filenames (list): A list of filenames.
+            path2sent (dict): A dictionary mapping paths to sentences.
+            impression_num (dict): The number of sentences of each report.
+
+        """
         # get study to captions mapping
         filepath = os.path.join("./", "captions_{}_{}_{}.pickle".format(PICKLE_SUFFIX, dataset, view))
         if not os.path.isfile(filepath):
-            print(f"Caption file {filepath} does not exit. Creating captions...")
+            print(f"Caption file {filepath} does not exist. Creating captions...")
             path2sent, to_remove, impression_num = self.create_path_2_sent_mapping(
                 self.df, self.max_word_num
             )
@@ -108,7 +138,17 @@ class MultimodalPretrainingDataset(data.Dataset):
         return filenames, path2sent, impression_num
 
     def get_caption(self, path):
+        """
+        Get a caption for the given path.
 
+        Args:
+            path (str): The path to the image.
+
+        Returns:
+            tokens (torch.Tensor): The tokenized caption.
+            x_len (int): The length of the caption.
+        
+        """
         series_sents = self.path2sent[path]
 
         if len(series_sents) == 0:
@@ -158,22 +198,57 @@ class MultimodalPretrainingDataset(data.Dataset):
         return tokens, x_len
 
     def equalize_hist(self, data, use_mask=True):
+        """
+        Equalizes the histogram of the image.
+
+        Args:
+            data (ndarray): The image to be equalized.
+            use_mask (bool, optional): Exclude zero values from the equalization process.
+
+        Returns:
+            img: The equalized image.
+
+        """
+        # Create a mask if use_mask is True
         if use_mask:
             mask = (np.array(data) != 0)
         else:
             mask = None
+
         img = np.array(data) / 255.
         img = exposure.equalize_hist(img, mask=mask)
         img = (255 * img).astype(np.uint8)
+
         return img
 
     def read_img(self, img_path):
+        """
+        Read an image from the given path and equalize its histogram.
+
+        Args:
+            img_path (str): The path to the image.
+
+        Returns:
+            img: The equalized image.
+
+        """
+
         data = PIL.Image.open(img_path)
         img = self.equalize_hist(data, use_mask=True)
         img = PIL.Image.fromarray(img).convert('RGB')
         return img
 
     def get_imgs(self, img_path, transform=None):
+        """
+        Get the image from the given path.
+
+        Args:
+            img_path (str): The path to the image.
+            transform (object, optional): Data augmentation for images (default: None).
+
+        Returns:
+            img: The image.
+        """
         if self.cfg.data.image.equalize_hist:
             img = self.read_img(img_path)
         else:
@@ -189,6 +264,19 @@ class MultimodalPretrainingDataset(data.Dataset):
         return img
 
     def __getitem__(self, index):
+        """
+        Get data.
+
+        Args:
+            index (int): The index of the item to retrieve.
+
+        Returns:
+            imgs (torch.Tensor): The images.
+            caps (list): The captions.
+            cap_len (int): The length of the captions.
+            key (str): The file name.
+            label (torch.Tensor): The label for the item.
+        """
 
         key = self.filenames[index]
 
@@ -204,7 +292,19 @@ class MultimodalPretrainingDataset(data.Dataset):
         return len(self.filenames)
 
     def create_path_2_sent_mapping(self, df, max_word_num):
+        """
+        Create a mapping from image path to its corresponding sentences.
 
+        Args:
+            df (DataFrame): The data.
+            max_word_num (int): The maximum number of words in the sentence.
+
+        Returns:
+            path2sent (dict): The mapping from image path to its corresponding sentences.
+            to_remove (list): The list of paths with empty reports to remove.
+            impression_num (dict): The number of sentences of each report.
+        
+        """
         sent_lens, num_sents, to_remove = [], [], []
         path2sent = {}
         impression_num = {}
@@ -315,11 +415,15 @@ class MultimodalPretrainingDataset(data.Dataset):
 
     def _resize_img(self, img, scale):
         """
+        Resize the image to the desired scale.
+        
         Args:
             img - image as numpy array (cv2)
             scale - desired output image-size as scale x scale
+        
         Return:
             image resized to scale x scale with shortest dimension 0-padded
+        
         """
         size = img.shape
         max_dim = max(size)
@@ -363,11 +467,17 @@ class MultimodalPretrainingDataset(data.Dataset):
 
 
 def multimodal_collate_fn(batch):
-    """sort sequence"""
+    """Sorts a batch of data with sequence length.
 
+    Args:
+        batch: A list of tuples, where each tuple contains the image, caption, caption length, path, and label.
+
+    Returns:
+        A dictionary containing the sorted and batched data.
+    """
     imgs, cap_len, ids, tokens, attention, path, labels = [], [], [], [], [], [], []
 
-    # flattern
+    # Flatten the batch
     for b in batch:
         img, cap, cap_l, p, label = b
         imgs.append(img)
@@ -378,15 +488,17 @@ def multimodal_collate_fn(batch):
         path.append(p)
         labels.append(label)
 
-    # stack
+    # Stack the tensors
     imgs = torch.stack(imgs)
     ids = torch.stack(ids).squeeze()
     tokens = torch.stack(tokens).squeeze()
     attention = torch.stack(attention).squeeze()
     labels = torch.stack(labels)
 
-    # sort and add to dictionary
+    # Sort the caption lengths and indices
     sorted_cap_lens, sorted_cap_indices = torch.sort(torch.tensor(cap_len), 0, True)
+
+    # Create a dictionary of batched data
     return_dict = {
         "caption_ids": ids[sorted_cap_indices],
         "token_type_ids": tokens[sorted_cap_indices],

@@ -19,12 +19,12 @@ matplotlib.use('Agg')
 from functools import reduce
 
 class ImageTextInferenceEngine:
+    """Base class for image-text inference engine."""
 
     def __init__(self) -> None:
         pass
 
     def load_model(self, **kwargs):
-
         raise NotImplementedError
 
     def get_img_emb(self, image_path: Path, device):
@@ -33,13 +33,24 @@ class ImageTextInferenceEngine:
     def get_text_emb(self, query_text: str, device):
         raise NotImplementedError
 
-
     def get_similarity_map_from_raw_data(
         self, image_path: Path, query_text: str, device, interpolation: str = "nearest",
         ) -> np.ndarray:
-        img_emb = self.get_img_emb(image_path, device)
+        """
+        Get image embeddings.
+
+        Inputs:
+            - image_path (Path): path to image
+            - device (torch.device): device
+
+        Returns:
+            - emb (dict): embeddings
+            - iel (torch.Tensor): image embeddings local (h, w, feature_size)
+            - ieg (torch.Tensor): image embeddings global (1, feature_size)
+        """
+        img_emb = self.get_img_emb(image_path, device) 
         text_emb = self.get_text_emb(query_text, device)
-        iel, teg = img_emb["iel"], text_emb["teg"]
+        iel, teg = img_emb["iel"], text_emb["teg"]  # image local embeddings, text global embeddings
         sim = self._get_similarity_map_from_embeddings(iel, teg)
         resized_sim_map = self.convert_similarity_to_image_size(
             sim,
@@ -54,6 +65,19 @@ class ImageTextInferenceEngine:
     
     @staticmethod
     def set_margin(similarity_map, width=224, height=224, resize_size=512, crop_size=448):
+        """
+        Set the margin of the similarity map based on the image size and crop size.
+
+        Inputs:
+            - similarity_map (torch.Tensor): similarity map of shape [n_patches_h, n_patches_w]
+            - width (int): width of the image
+            - height (int): height of the image
+            - resize_size (int): size of the image after resizing
+            - crop_size (int): size of the image after cropping
+
+        Returns:
+            - similarity_map (torch.Tensor): similarity map with margin set
+        """
         smallest_dimension = min(height, width)
         cropped_size_orig_space = int(crop_size * smallest_dimension / resize_size)
         target_size = cropped_size_orig_space, cropped_size_orig_space
@@ -70,9 +94,14 @@ class ImageTextInferenceEngine:
         projected_image_embeddings: torch.Tensor, projected_text_embeddings: torch.Tensor, sigma: float = 1.5
     ) -> torch.Tensor:
         """
-        :param projected_image_embeddings: [1, feature_size]
-        :param projected_text_embeddings: [cls_num, feature_size]
-        :return: similarity: similarity of shape [1, cls_num]
+        Get global similarity between image and text embeddings.
+
+        Inputs:
+            - projected_image_embeddings (torch.Tensor): image embeddings [1, feature_size]
+            - projected_text_embeddings (torch.Tensor): text embeddings [cls_num, feature_size]
+
+        Returns:
+            - similarity (torch.Tensor): similarity of shape [1, cls_num]
         """
         img_norm = projected_image_embeddings / projected_image_embeddings.norm(dim=-1, keepdim=True)
         text_norm = projected_text_embeddings / projected_text_embeddings.norm(dim=-1, keepdim=True)
@@ -86,11 +115,15 @@ class ImageTextInferenceEngine:
     def _get_similarity_map_from_embeddings(
         projected_patch_embeddings: torch.Tensor, projected_text_embeddings: torch.Tensor, sigma: float = 1.5
     ) -> torch.Tensor:
-        """Get smoothed similarity map for a given image patch embeddings and text embeddings.
+        """
+        Get smoothed similarity map for a given image patch embeddings and text embeddings.
 
-        :param projected_patch_embeddings: [n_patches_h, n_patches_w, feature_size]
-        :param projected_text_embeddings: [1, feature_size]
-        :return: similarity_map: similarity map of shape [n_patches_h, n_patches_w]
+        Inputs:
+            - projected_patch_embeddings (torch.Tensor): patch embeddings [n_patches_h, n_patches_w, feature_size]
+            - projected_text_embeddings (torch.Tensor): text embeddings [1, feature_size]
+
+        Returns:
+            - similarity_map (torch.Tensor): similarity map of shape [n_patches_h, n_patches_w]
         """
         n_patches_h, n_patches_w, feature_size = projected_patch_embeddings.shape
         assert feature_size == projected_text_embeddings.shape[1]
@@ -157,6 +190,7 @@ class Pipeline:
         self.kwargs = kwargs
     
     def run(self, **kwargs):
+        """run test pipeline"""
         self.kwargs.update(kwargs)
         self.createdir(kwargs["ckpt"], kwargs["dataset"])
         data = load_data(**kwargs)
@@ -170,6 +204,7 @@ class Pipeline:
                 **kwargs) 
 
     def createdir(self, ckpt: str, dataset: str):
+        """Create directory to save results."""
         if os.path.exists(ckpt):
             dn = os.path.join(os.path.dirname(ckpt), dataset)
             bn = os.path.splitext(os.path.basename(ckpt))[0]
@@ -179,6 +214,7 @@ class Pipeline:
         os.makedirs(self.save_dir, exist_ok=True)
 
     def get_hmaps(self, path_list: list, label_text: list, category, redo=False, **kwargs):
+        """Get similarity maps for all images and text queries."""
         dataset = kwargs["dataset"]
         suffix = kwargs["suffix"] if "suffix" in kwargs else ""
         save_path = os.path.join(self.save_dir, f"hmaps{suffix}.npy")
@@ -202,6 +238,7 @@ class Pipeline:
     
     @staticmethod
     def set_margin(similarity_map, width=224, height=224, resize_size=512, crop_size=448):
+        """Set the margin of the similarity map based on the image size and crop size."""
         smallest_dimension = min(height, width)
         cropped_size_orig_space = int(crop_size * smallest_dimension / resize_size)
         target_size = cropped_size_orig_space, cropped_size_orig_space
@@ -214,6 +251,17 @@ class Pipeline:
         return similarity_map
 
     def test(self, path_list: list, label_text: list, hmaps: list, gtmasks: list, boxes: list, category:list, **kwargs):
+        """
+        Test the model on the given dataset.
+
+        Inputs:
+            - path_list (list): list of image paths
+            - label_text (list): list of text prompts
+            - hmaps (list): list of similarity maps
+            - gtmasks (list): list of ground truth masks
+            - boxes (list): list of bounding boxes
+            - category (list): list of categories
+        """
         res = pd.DataFrame()
         iou_thre_cat = []
         cnr_thre_cat = []
@@ -296,6 +344,7 @@ class Pipeline:
 
 
 def dict_mean(d: dict, sep=False):
+    """Compute mean of values in a dictionary."""
     if sep:
         res = {}
         for k, v in d.items():
@@ -309,10 +358,12 @@ def dict_mean(d: dict, sep=False):
 
 
 def prefix(prefix, l):
+    """Add prefix to a list of strings."""
     return {i: prefix + i for i in l}
 
 
 def to_metric_df(cat_matric):
+    """Convert dictionary to dataframe."""
     res = pd.DataFrame()
     columns = cat_matric.keys()
     row_n = sum([len(list(i)) for i in cat_matric.values()])
@@ -349,6 +400,7 @@ def bootstrap_metric(df, num_replicates):
 
 
 def compute_cis(series, confidence_level):
+    """Compute confidence intervals."""
     sorted_perfs = series.sort_values()
     lower_index = int(confidence_level/2 * len(sorted_perfs)) - 1
     upper_index = int((1 - confidence_level/2) * len(sorted_perfs)) - 1
@@ -359,6 +411,7 @@ def compute_cis(series, confidence_level):
 
 
 def create_ci_record(perfs, task):
+    """Create confidence interval record."""
     lower, mean, upper = compute_cis(perfs, confidence_level = 0.05)
     record = {"name": task,
               "lower": lower,
@@ -366,7 +419,9 @@ def create_ci_record(perfs, task):
               "upper": upper}
     return record
 
+
 def bootci(df, save_dir, metric="iou"):
+    """Compute confidence intervals to a dataframe."""
     bs_df = bootstrap_metric(df, 1000)
     bs_df.to_csv(f'{save_dir}/{metric}_bootstrap_results.csv', index=False)
     records = []

@@ -42,6 +42,21 @@ def attention_fn(query, context, temp1):
 
 
 def global_loss(cnn_code, rnn_code, eps=1e-8, temp3=10.0, weight_matrix=None):
+    """
+    Global alignment loss
+
+    Inputs:
+        cnn_code (torch.Tensor): image features from CNN, shape: (batch_size, 768)
+        rnn_code (torch.Tensor): text features from RNN, shape: (batch_size, 768)
+        eps (float): epsilon value to avoid division by zero
+        temp3 (float): temperature value
+        weight_matrix (torch.Tensor): weight matrix for loss
+
+    Returns:
+        loss0 (torch.Tensor): image-text global loss
+        loss1 (torch.Tensor): text-image global loss
+        scores0 (torch.Tensor): global similarity scores
+    """
 
     batch_size = cnn_code.shape[0]
     labels = Variable(torch.LongTensor(range(batch_size))).to(cnn_code.device)
@@ -79,6 +94,25 @@ def global_loss(cnn_code, rnn_code, eps=1e-8, temp3=10.0, weight_matrix=None):
 def local_loss(
     img_features, words_emb, cap_lens, temp1=4.0, temp2=5.0, temp3=10.0, agg="sum", softmax_one=False, weight_matrix=None
 ):
+    """
+    Local alignment loss
+
+    Inputs:
+        img_features (torch.Tensor): image features from CNN, shape: (batch_size, 768, 19, 19)
+        words_emb (torch.Tensor): text features from RNN, shape: (batch_size, 768, max_length)
+        cap_lens (torch.Tensor): caption lengths, shape: (batch_size,)
+        temp1 (float): temperature value for attention
+        temp2 (float): temperature value for similarity
+        temp3 (float): temperature value for similarity
+        agg (str): aggregation method for similarity
+        softmax_one (bool): whether to apply softmax to similarity
+        weight_matrix (torch.Tensor): weight matrix for loss
+
+    Returns:
+        loss0 (torch.Tensor): image-text local loss
+        loss1 (torch.Tensor): text-image local loss
+        att_maps (list): attention maps for text-image alignment
+    """
 
     batch_size = img_features.shape[0]
 
