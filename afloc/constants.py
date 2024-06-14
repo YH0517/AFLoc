@@ -8,7 +8,7 @@ PRETRAIN_IMPRESSION_COL = "impression"
 PICKLE_SUFFIX = "report"
 
 # MIMIC constants
-MIMIC_DATA_DIR = Path("/mnt/disk2/hwj/MIMIC-DATA-Final/MIMIC-CXR/")
+MIMIC_DATA_DIR = Path("/mnt/disk2/hwj/MIMIC-DATA-Final/MIMIC-CXR/")  # Path to MIMIC-CXR dataset, please change it to your own path
 MIMIC_IMG_DIR = MIMIC_DATA_DIR / "MIMIC-224-inter-area/files/"
 MIMIC_ORIGINAL_TRAIN_CSV = MIMIC_DATA_DIR / "BASE-MIMIC.csv"
 MIMIC_MASTER_CSV = MIMIC_DATA_DIR / "BASE-MIMIC.csv"  # contains patient information, not PHI conplient
