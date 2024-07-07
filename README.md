@@ -18,7 +18,7 @@ Defining pathologies automatically from medical images aids the understanding of
 
  **Quantatitive pathological lesions localization results**
 
-<img src="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/results_cxr.png" width="50%" />
+<img src="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/results_cxr.jpg" width="50%" />
 
 **Visualizations of pathological lesions localization**
 
