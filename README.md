@@ -106,7 +106,7 @@ This project is under the Apache License 2.0 license. See [LICENSE](https://gith
 
 ## Acknowledgement
 
-Some codes are reference from [GLoRIA](https://github.com/marshuang80/gloria), [BioViL](https://github.com/microsoft/hi-ml), and [cheXlocalize]https://github.com/rajpurkarlab/cheXlocalize. We thank the authors for making their valuable code & data publicly available.
+Some codes are reference from [GLoRIA](https://github.com/marshuang80/gloria), [BioViL](https://github.com/microsoft/hi-ml), and [cheXlocalize](https://github.com/rajpurkarlab/cheXlocalize). We thank the authors for making their valuable code & data publicly available.
 
 ## Citation
 
