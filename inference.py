@@ -4,6 +4,7 @@ import sys
 import torch
 import matplotlib
 import argparse
+import numpy as np
 from pathlib import Path
 
 sys.path.append(os.getcwd())
@@ -88,7 +89,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-
+    np.random.seed(0)
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt_dir", "-d", type=str, default="pretrained")
     parser.add_argument("--dataset", "-ds", type=str, default="MS_CXR")

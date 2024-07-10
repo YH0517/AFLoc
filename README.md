@@ -1,16 +1,16 @@
 # AFLoc
 
-This repository provides the official implementation of *[Multi-modal vision-language model for generalizable annotation-free pathological lesions localization and clinical diagnosis](https://arxiv.org/abs/2401.02044)*
+This repository provides the official implementation of *[Multi-modal vision-language model for generalizable annotation-free pathology localization and clinical diagnosis](https://arxiv.org/abs/2401.02044)*
 
 ## Key Features
 
-- A generalizable vision-language pre-training model for **annotation-free pathological lesions localization**.
+- A generalizable vision-language pre-training model for **annotation-free pathology localization**.
 - We use a multi-level semantic structure-based contrastive learning to aligns multi-granularity medical concepts across reports and images.
 - Demonstrates strong generalizability to mulitiple modalities including chest X-rays and retinal fundus images.
 
 ## Details
 
-Defining pathologies automatically from medical images aids the understanding of the emergence and pro- gression of diseases, and such an ability is crucial in clinical diagnostics. However, existing deep learning models heavily rely on expert annotations and lack generalization capabilities in open clinical environments. In this study, we present a generalizable vision-language pre-training model for Annotation-Free pathological lesions Localization (AFLoc). The core strength of AFLoc lies in its extensive multi-level semantic structure- based contrastive learning, which comprehensively aligns multi-granularity medical concepts from reports with abundant image features, to adapt to the diverse expressions of pathologies and unseen pathologies with- out the reliance on image annotations from experts. We demonstrate the proof of concept on CXR images, with extensive experimental validation across 4 distinct external datasets, encompassing 11 types of chest pathologies. The results demonstrate that AFLoc surpasses state-of-the-art methods in pathological lesions localization and disease classification, and even outperforms the human benchmark in locating 5 different pathologies. Additionally, we further verify its generalization ability by applying it to retinal fundus images. Our approach showcases AFoc versatilities and underscores its suitability for clinical diagnoses in complex clinical environments.
+Annotation-Free pathology Localization (AFLoc). The core strength of AFLoc lies in its extensive multi-level semantic structure-based contrastive learning, which comprehensively aligns multi-granularity medical concepts from reports with abundant image features, to adapt to the diverse expressions of pathologies and unseen pathologies without the reliance on image annotations from experts. We demonstrate the proof of concept on Chest X-ray images, with extensive experimental validation across 6 distinct external datasets, encompassing 13 types of chest pathologies. The results demonstrate that AFLoc surpasses state-of-the-art methods in pathology localization and classification, and even outperforms the human benchmark in locating 5 different pathologies. Additionally, we further verify its generalization ability by applying it to retinal fundus images. Our approach showcases AFLoc's versatilities and underscores its suitability for clinical diagnosis in complex clinical environments.
 
 <div align="center">
     <a href="https://"><img width="1000px" height="auto" src="https://github.com/YH0517/AFLoc/blob/master/assets/fig1.png"></a>
@@ -46,13 +46,13 @@ Our experiments are based on a server with two NVIDIA A100 80GB GPU, 512G memory
 >
 > torchvision==0.9.0
 >
-> pycocotools
+> omegaconf==2.0.5
 >
 > pydicom
 >
 > numpy
 >
-> omegaconf
+> pycocotools
 
 **Installation**
 
@@ -106,7 +106,7 @@ This project is under the Apache License 2.0 license. See [LICENSE](https://gith
 
 ## Acknowledgement
 
-Some codes are reference from [GLoRIA](https://github.com/marshuang80/gloria) and [BioViL](https://github.com/microsoft/hi-ml). We thank the authors for making their valuable code & data publicly available.
+Some codes are reference from [GLoRIA](https://github.com/marshuang80/gloria), [BioViL](https://github.com/microsoft/hi-ml), and [cheXlocalize]https://github.com/rajpurkarlab/cheXlocalize. We thank the authors for making their valuable code & data publicly available.
 
 ## Citation
 
@@ -114,7 +114,7 @@ If you find this repository useful, please consider citing this paper:
 
 ```
 @article{afloc,
-    title={Multi-modal vision-language model for generalizable annotation-free pathological lesions localization and clinical diagnosis},
+    title={Multi-modal vision-language model for generalizable annotation-free pathology localization and clinical diagnosis},
     author={Hao Yang, Hong-Yu Zhou, Zhihuan Li, Yuanxu Gao, Cheng Li, Weijian Huang, Jiarun Liu, Hairong Zheng, Kang Zhang, and Shanshan Wang},
     journal={arXiv preprint arXiv:2401.02044},
     year={2024}

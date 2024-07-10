@@ -315,6 +315,8 @@ class Pipeline:
             else:
                 sep_cat["iou"] = pd.concat([sep_cat["iou"], pd.DataFrame(dict_mean(cat_ious, sep=True))], axis=0, ignore_index=True)
                 sep_cat["cnr"] = pd.concat([sep_cat["cnr"], pd.DataFrame(dict_mean(cat_cnrs, sep=True))], axis=0, ignore_index=True)
+            
+            bootci(metric_df_iou, self.save_dir, f"iou_thre_{round(threshold, 1)}")
 
         total_df_iou = reduce(lambda x, y: x.add(y, fill_value=0), metric_df_thre_iou)
         total_df_cnr = reduce(lambda x, y: x.add(y, fill_value=0), metric_df_thre_cnr)
