@@ -62,7 +62,7 @@ python train.py -c ./afloc/config.yaml --train
 
 **Inference**
 
-Update the directory to your own within `classification/constants.py` and `localization/constants.py`. Then you can inference AFLoc on MS-CXR with following command:
+Update the directory to your own within `classification/constants.py` and `localization/constants.py`. Then you can inference AFLoc with following command:
 
 ```shell
 bash run.sh 
