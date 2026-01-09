@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 
 sys.path.append(os.getcwd())
-from eval.common import Pipeline, ImageTextInferenceEngine
+from localization.common import Pipeline, ImageTextInferenceEngine
 FONT_MAX = 50
 matplotlib.use('Agg')
 
@@ -28,21 +28,20 @@ class Engine(ImageTextInferenceEngine):
         self.image_inference_engine = self.model.image_encoder_forward
         self.text_inference_engine = self.model.text_encoder_forward
         self.model.cfg.data.image.imsize = 224
+        self.flag = self.model.cfg.data.image.flag
         
     def get_img_emb(self, image_path: Path, device):
         """
         Get image embeddings.
-
         Inputs:
             - image_path (Path): path to image
             - device (torch.device): device
-
         Returns:
             - emb (dict): embeddings
-                - iel (torch.Tensor): image embeddings local (h, w, feature_size)
-                - ieg (torch.Tensor): image embeddings global (1, feature_size)
+            - iel (torch.Tensor): image embeddings local (h, w, feature_size)
+            - ieg (torch.Tensor): image embeddings global (1, feature_size)
         """
-        pi = self.model.process_img([image_path], device, equalize_hist=False)
+        pi = self.model.process_img([image_path], device, equalize_hist=False, flag=self.flag)
         with torch.no_grad():
             iel, _, _, ieg = self.image_inference_engine(pi.to(device))
         iel = iel.view(-1, *iel.shape[2:]).permute(1, 2, 0)
@@ -52,11 +51,9 @@ class Engine(ImageTextInferenceEngine):
     def get_text_emb(self, query_text: str, device):
         """
         Get text embeddings.
-
         Inputs:
             - query_text (str): query text
             - device (torch.device): device
-
         Returns:
             - emb (dict): embeddings
                 - tel (torch.Tensor): text embeddings local (word_num, feature_size)
@@ -74,31 +71,29 @@ class Engine(ImageTextInferenceEngine):
 
 
 def main(**kwargs):
-
-    ckpt_dir = os.path.abspath(kwargs["ckpt_dir"])
-    if not os.path.exists(ckpt_dir):
-        return False
-    ckpt_list = sorted([os.path.join(ckpt_dir, i) for i in os.listdir(ckpt_dir) if i.endswith(".ckpt")])
-    
     engine = Engine()
-    pipeline = Pipeline(engine, margin=True, **kwargs)
-    for ckpt in ckpt_list:
-        print(ckpt)
-        pipeline.run(ckpt=ckpt, **kwargs)
+    pipeline = Pipeline(engine, **kwargs)
+    pipeline.run(**kwargs)
     return True
 
 
 if __name__ == "__main__":
     np.random.seed(0)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt_dir", "-d", type=str, default="pretrained")
-    parser.add_argument("--dataset", "-ds", type=str, default="MS_CXR")
-    parser.add_argument("--redo", "-r", action='store_true', default=False)
-    parser.add_argument('--gpu', type=str, default='5', help='gpu')
+    parser.add_argument("--ckpt", type=str, default="weight/Pretrained_Path.ckpt")
+    parser.add_argument("--dataset", "-ds", type=str, default="CHEXLOCALIZE",
+                        choices=["MS_CXR", "MS_CXR_CLS", "RSNA_GROUNDING", "COVID_RURAL", "CHEXLOCALIZE",
+                                 "IRH", "SICAPV2_GROUNDING"])
+    parser.add_argument("--redo", "-r", action='store_true', default=True)
+    parser.add_argument('--gpu', type=str, default='6', help='gpu')
+    parser.add_argument('--opt_th', action='store_true', default=False)
+    parser.add_argument('--only_pos', action='store_true', default=False)
+    parser.add_argument('--eval_val_or_test', type=str, default='test', choices=['val', 'test'])
+    parser.add_argument('--use_prob', action='store_true', default=False)
+    parser.add_argument('--margin', action='store_true', default=False)
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    ckpt_dir = args.ckpt_dir
     res = main(**vars(args))
 
 

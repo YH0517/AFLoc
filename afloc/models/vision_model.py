@@ -1,9 +1,6 @@
-from numpy.lib.function_base import extract
 import torch
 import torch.nn as nn
-
 from . import cnn_backbones
-from omegaconf import OmegaConf
 import torch.nn.functional as F
 
 
@@ -69,15 +66,15 @@ class ImageEncoder(nn.Module):
                 bias=False,
             )
         
-        if self.cfg.model.afloc.use_ce_loss:
-            self.local_f_embedder = nn.Conv2d(
-                self.interm_feature_dim * 2,
-                self.output_dim,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-                bias=False,
-            )
+        # if self.cfg.model.afloc.use_ce_loss:
+        #     self.local_f_embedder = nn.Conv2d(
+        #         self.interm_feature_dim * 2,
+        #         self.output_dim,
+        #         kernel_size=1,
+        #         stride=1,
+        #         padding=0,
+        #         bias=False,
+        #     )
 
         self.pool = nn.AdaptiveAvgPool2d(output_size=(1, 1))
 
@@ -136,8 +133,8 @@ class ImageEncoder(nn.Module):
         local_embf = None
         if self.cfg.model.afloc.use_local_word_loss:
             local_emb2 = self.local2_embedder(local_features2)
-        if self.cfg.model.afloc.use_ce_loss:
-            local_embf = self.local_f_embedder(local_features_final)
+        # if self.cfg.model.afloc.use_ce_loss:
+        #     local_embf = self.local_f_embedder(local_features_final)
 
         return global_emb, local_emb, local_emb2, local_embf
 

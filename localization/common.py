@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Callable, Optional
 from scipy import ndimage
 sys.path.append(os.getcwd())
-from eval.utils import load_data, norm_heatmap
-from eval.metric import compute_iou, compute_cnr
+from localization.datasets import load_data, norm_heatmap
+from localization.metrics import compute_iou, compute_cnr, compute_dice, AUC
+from localization.constants import threshold_list_dct
+import cv2
 FONT_MAX = 50
 matplotlib.use('Agg')
 from functools import reduce
@@ -88,28 +90,6 @@ class ImageTextInferenceEngine:
         nan = torch.isnan(mask)
         similarity_map[nan] = float("NaN")
         return similarity_map
-
-    @staticmethod
-    def _get_similarity_from_embeddings(
-        projected_image_embeddings: torch.Tensor, projected_text_embeddings: torch.Tensor, sigma: float = 1.5
-    ) -> torch.Tensor:
-        """
-        Get global similarity between image and text embeddings.
-
-        Inputs:
-            - projected_image_embeddings (torch.Tensor): image embeddings [1, feature_size]
-            - projected_text_embeddings (torch.Tensor): text embeddings [cls_num, feature_size]
-
-        Returns:
-            - similarity (torch.Tensor): similarity of shape [1, cls_num]
-        """
-        img_norm = projected_image_embeddings / projected_image_embeddings.norm(dim=-1, keepdim=True)
-        text_norm = projected_text_embeddings / projected_text_embeddings.norm(dim=-1, keepdim=True)
-        similarity = img_norm @ text_norm.t()
-
-        # similarity = projected_image_embeddings @ projected_text_embeddings.t()
-
-        return similarity
 
     @staticmethod
     def _get_similarity_map_from_embeddings(
@@ -190,18 +170,46 @@ class Pipeline:
         self.kwargs = kwargs
     
     def run(self, **kwargs):
-        """run test pipeline"""
         self.kwargs.update(kwargs)
         self.createdir(kwargs["ckpt"], kwargs["dataset"])
-        data = load_data(**kwargs)
-        hmaps = self.get_hmaps(data["path"], data["label_text"], data["category"], **kwargs)
-        self.test(path_list=data["path"],
-                label_text=data["label_text"],
-                gtmasks=data["gtmasks"],
-                boxes=data["boxes"],
-                category=data["category"],
-                hmaps=hmaps,
-                **kwargs) 
+        if kwargs["opt_th"]:
+            suffix = "_use_prob" if "use_prob" in kwargs and kwargs["use_prob"] else ""
+            save_path = f"{self.save_dir}/opt_th{suffix}.csv" 
+            redo = kwargs["redo"]
+            if not(os.path.exists(save_path) and redo == False):
+                data = load_data(split="val", **kwargs)
+                hmaps = self.get_hmaps(data["path"], data["label_text"], data["gtmasks"], suffix="_val", **kwargs)
+                self.get_opt_th(path_list=data["path"],
+                    label_text=data["label_text"],
+                    gtmasks=data["gtmasks"],
+                    boxes=data["boxes"],
+                    category=data["category"],
+                    label_list=data["label"],
+                    hmaps=hmaps,
+                    **kwargs)
+            for split in ["val", "test"]:
+                kwargs["eval_val_or_test"] = split
+                data = load_data(split=split, **kwargs)
+                hmaps = self.get_hmaps(data["path"], data["label_text"], data["gtmasks"], suffix=f"_{split}", **kwargs)
+                self.test_use_opt_th(path_list=data["path"],
+                    label_text=data["label_text"],
+                    gtmasks=data["gtmasks"],
+                    boxes=data["boxes"],
+                    category=data["category"],
+                    label_list=data["label"],
+                    hmaps=hmaps,
+                    **kwargs)
+
+        else:
+            data = load_data(**kwargs)
+            hmaps = self.get_hmaps(data["path"], data["label_text"], data["gtmasks"], **kwargs)
+            self.test(path_list=data["path"],
+                    label_text=data["label_text"],
+                    gtmasks=data["gtmasks"],
+                    boxes=data["boxes"],
+                    category=data["category"],
+                    hmaps=hmaps,
+                    **kwargs) 
 
     def createdir(self, ckpt: str, dataset: str):
         """Create directory to save results."""
@@ -213,9 +221,8 @@ class Pipeline:
             self.save_dir = os.path.join(os.getcwd(), "result", dataset)
         os.makedirs(self.save_dir, exist_ok=True)
 
-    def get_hmaps(self, path_list: list, label_text: list, category, redo=False, **kwargs):
+    def get_hmaps(self, path_list: list, label_text: list, gtmasks, redo=False, **kwargs):
         """Get similarity maps for all images and text queries."""
-        dataset = kwargs["dataset"]
         suffix = kwargs["suffix"] if "suffix" in kwargs else ""
         save_path = os.path.join(self.save_dir, f"hmaps{suffix}.npy")
         if os.path.exists(save_path) and redo == False:
@@ -230,6 +237,9 @@ class Pipeline:
                     device="cuda",
                     interpolation="bilinear",
                 )
+                mask_shape = gtmasks[i].shape
+                if mask_shape[0] != hmap.shape[0] or mask_shape[1] != hmap.shape[1]:
+                    hmap = cv2.resize(hmap, (mask_shape[1], mask_shape[0]))
                 key = str(path_list[i]) + label_text[i]
                 hmaps[key] = {"hmap": hmap}
 
@@ -250,7 +260,7 @@ class Pipeline:
         similarity_map[nan] = float("NaN")
         return similarity_map
 
-    def test(self, path_list: list, label_text: list, hmaps: list, gtmasks: list, boxes: list, category:list, **kwargs):
+    def test(self, path_list: list, label_text: list, hmaps: list, gtmasks: list, category:list, **kwargs):
         """
         Test the model on the given dataset.
 
@@ -259,22 +269,25 @@ class Pipeline:
             - label_text (list): list of text prompts
             - hmaps (list): list of similarity maps
             - gtmasks (list): list of ground truth masks
-            - boxes (list): list of bounding boxes
             - category (list): list of categories
         """
         res = pd.DataFrame()
         iou_thre_cat = []
         cnr_thre_cat = []
+        dice_thre_cat = []
         sep_cat = {}
         metric_df_thre_iou = []
         metric_df_thre_cnr = []
+        metric_df_thre_dice = []
 
-        threshold_list = list(np.arange(0.1, 0.6, 0.1))
+        threshold_list = threshold_list_dct[kwargs["dataset"]]
         for threshold in threshold_list:
             ious = []
             cnrs = []
+            dices = []
             cat_ious = {}
             cat_cnrs = {}
+            cat_dices = {}
 
             for i in tqdm(range(len(path_list[:]))):
                 key = str(path_list[i]) + label_text[i]
@@ -293,48 +306,68 @@ class Pipeline:
                 cnr = compute_cnr(gtmask, heatmap, nan)
                 cnrs.append(cnr)
 
+                dice = compute_dice(gtmask, mask, nan)
+                dices.append(dice)
+
                 cat = category[i]
                 if cat not in cat_ious:
                     cat_ious[cat] = []
                     cat_cnrs[cat] = []
+                    cat_dices[cat] = []
                     
                 cat_ious[cat].append(iou)
                 cat_cnrs[cat].append(cnr)
+                cat_dices[cat].append(dice)
 
             metric_df_iou = to_metric_df(cat_ious)
             metric_df_thre_iou.append(metric_df_iou)
             metric_df_cnr = to_metric_df(cat_cnrs)
             metric_df_thre_cnr.append(metric_df_cnr)
+            metric_df_dice = to_metric_df(cat_dices)
+            metric_df_thre_dice.append(metric_df_dice)
 
             iou_thre_cat.append(dict_mean(cat_ious))
             cnr_thre_cat.append(dict_mean(cat_cnrs))
+            dice_thre_cat.append(dict_mean(cat_dices))
 
             if "iou" not in sep_cat:
                 sep_cat["iou"] = pd.DataFrame(dict_mean(cat_ious, sep=True))
                 sep_cat["cnr"] = pd.DataFrame(dict_mean(cat_cnrs, sep=True))
+                sep_cat["dice"] = pd.DataFrame(dict_mean(cat_dices, sep=True))
             else:
                 sep_cat["iou"] = pd.concat([sep_cat["iou"], pd.DataFrame(dict_mean(cat_ious, sep=True))], axis=0, ignore_index=True)
                 sep_cat["cnr"] = pd.concat([sep_cat["cnr"], pd.DataFrame(dict_mean(cat_cnrs, sep=True))], axis=0, ignore_index=True)
-            
-            bootci(metric_df_iou, self.save_dir, f"iou_thre_{round(threshold, 1)}")
+                sep_cat["dice"] = pd.concat([sep_cat["dice"], pd.DataFrame(dict_mean(cat_dices, sep=True))], axis=0, ignore_index=True)
+            if kwargs["dataset"] == "MS_CXR":
+                bootci(metric_df_iou, self.save_dir, f"iou_thre_{round(threshold, 1)}")
+            elif kwargs["dataset"] == "SICAPV2":
+                bootci(metric_df_iou, self.save_dir, f"iou_thre_{round(threshold, 1)}")
+                bootci(metric_df_cnr, self.save_dir, f"cnr_thre_{round(threshold, 1)}")
+                bootci(metric_df_dice, self.save_dir, f"dice_thre_{round(threshold, 1)}")
 
         total_df_iou = reduce(lambda x, y: x.add(y, fill_value=0), metric_df_thre_iou)
         total_df_cnr = reduce(lambda x, y: x.add(y, fill_value=0), metric_df_thre_cnr)
+        total_df_dice = reduce(lambda x, y: x.add(y, fill_value=0), metric_df_thre_dice)
         average_df_iou = total_df_iou / len(metric_df_thre_iou)
         average_df_cnr = total_df_cnr / len(metric_df_thre_cnr)
-        ci_df_iou = bootci(average_df_iou, self.save_dir, "iou")
-        ci_df_cnr = bootci(average_df_cnr, self.save_dir, "cnr")
+        average_df_dice = total_df_dice / len(metric_df_thre_dice)
+        bootci(average_df_iou, self.save_dir, "iou")
+        bootci(average_df_cnr, self.save_dir, "cnr")
+        bootci(average_df_dice, self.save_dir, "dice")
 
         res["threshold"] = threshold_list + ["mean"]
         res["iou_cat"] = iou_thre_cat + [np.mean(iou_thre_cat)]
         res["cnr_cat"] = cnr_thre_cat + [np.mean(cnr_thre_cat)]
+        res["dice_cat"] = dice_thre_cat + [np.mean(dice_thre_cat)]
 
         sep_cat["iou"].rename(columns=prefix("iou_", sep_cat["iou"].columns), inplace=True)
         sep_cat["cnr"].rename(columns=prefix("cnr_", sep_cat["cnr"].columns), inplace=True)
+        sep_cat["dice"].rename(columns=prefix("dice_", sep_cat["dice"].columns), inplace=True)
 
         # sep_cat add a row: mean
         sep_cat["iou"] = pd.concat([sep_cat["iou"], pd.DataFrame(sep_cat["iou"].mean(axis=0)).T], axis=0, ignore_index=True)
         sep_cat["cnr"] = pd.concat([sep_cat["cnr"], pd.DataFrame(sep_cat["cnr"].mean(axis=0)).T], axis=0, ignore_index=True)
+        sep_cat["dice"] = pd.concat([sep_cat["dice"], pd.DataFrame(sep_cat["dice"].mean(axis=0)).T], axis=0, ignore_index=True)
 
         # concat
         for k, v in sep_cat.items():
@@ -342,7 +375,226 @@ class Pipeline:
 
         res = res.round(3)
         res.to_csv(f"{self.save_dir}/metric.csv", index=False)
-        print(res.loc[:, ["threshold", "iou_cat", "cnr_cat", ]])
+        print(res.loc[:, ["threshold", "iou_cat", "cnr_cat", "dice_cat"]])
+
+    def get_opt_th(self, path_list: list, label_text: list, hmaps: list, gtmasks: list, category:list, label_list:list, **kwargs):
+        suffix = "_use_prob" if "use_prob" in kwargs and kwargs["use_prob"] else ""
+        opt_th_only_pos_path = f"{self.save_dir}/opt_th_only_pos.csv"
+        opt_th_path = f"{self.save_dir}/opt_th{suffix}.csv"
+        auc_path = f"{self.save_dir}/auc{suffix}.csv"
+
+        if not os.path.exists(opt_th_only_pos_path):
+            iou_thre = []
+            iou_thre_cat = []
+            sep_cat = {}
+            threshold_list = np.arange(0.2, 0.8, 0.1)
+            for threshold in threshold_list:
+                ious = []
+                cat_ious = {}
+
+                for i in tqdm(range(len(path_list[:]))):
+                    
+                    key = str(path_list[i]) + label_text[i]
+                    hmap = hmaps[key]["hmap"]
+                    if self.kwargs["margin"]:
+                        hmap = self.set_margin(hmap)
+
+                    nan = np.isnan(hmap)
+                    heatmap = norm_heatmap(hmap, nan, mode=1) # [0, 1]
+
+                    mask = np.where(heatmap > threshold, 1, 0)
+                    gtmask = gtmasks[i]
+
+                    iou = compute_iou(gtmask, mask, nan, only_pos=True)
+                    ious.append(iou)
+
+                    cat = category[i]
+                    if cat not in cat_ious:
+                        cat_ious[cat] = []
+                    cat_ious[cat].append(iou)
+
+                iou_thre_cat.append(dict_mean(cat_ious))
+                iou_thre.append(np.mean(ious))
+
+                if "iou" not in sep_cat:
+                    sep_cat["iou"] = pd.DataFrame(dict_mean(cat_ious, sep=True))
+                else:
+                    sep_cat["iou"] = pd.concat([sep_cat["iou"], pd.DataFrame(dict_mean(cat_ious, sep=True))], axis=0, ignore_index=True)
+
+            argmax = sep_cat["iou"].values.argmax(axis=0)
+            res = pd.DataFrame([threshold_list[argmax], sep_cat["iou"].max().values], columns=sep_cat["iou"].columns)
+            res = pd.concat([res, res.mean(axis=1).rename("mean")], axis=1)
+            res = res.round(3)
+            res.to_csv(opt_th_only_pos_path, index=False)
+            print(res)
+
+
+        iou_thre = []
+        iou_thre_cat = []
+        sep_cat = {}
+        if "use_prob" in kwargs and kwargs["use_prob"]:
+            threshold_list = np.arange(0.45, 0.55, 0.01)
+        else:
+            threshold_list = np.arange(0.1, 0.9, 0.1)
+        opt_th_only_pos = pd.read_csv(opt_th_only_pos_path)
+        confidence_list = []
+        for threshold in threshold_list:
+            ious = []
+            cat_ious = {}
+
+            for i in tqdm(range(len(path_list[:]))):
+                cat = category[i]
+                key = str(path_list[i]) + label_text[i]
+                hmap = hmaps[key]["hmap"]
+                
+                if self.kwargs["margin"]:
+                    hmap = self.set_margin(hmap)
+
+                nan = np.isnan(hmap)
+                gtmask = gtmasks[i]
+                heatmap = norm_heatmap(hmap, nan, mode=1) # [0, 1]
+                if "use_prob" in kwargs and kwargs["use_prob"]:
+                    prob = hmaps[key]["prob_sfmax"]
+                    confidence = prob
+                else:
+                    min_v, max_v = 0, 2
+                    clip = np.clip(hmap[~nan], min_v, max_v)
+                    confidence = np.max((clip - min_v) / (max_v - min_v))
+                if threshold == threshold_list[0]:
+                    confidence_list.append(confidence)
+                if confidence < threshold:
+                    mask = np.zeros_like(heatmap)
+                else:
+                    mask_th = opt_th_only_pos[cat].values[0]
+                    mask = np.where(heatmap > mask_th, 1, 0)
+                iou = compute_iou(gtmask, mask, nan, only_pos=False)
+
+                ious.append(iou)
+                
+                if cat not in cat_ious:
+                    cat_ious[cat] = []
+
+                cat_ious[cat].append(iou)
+
+            iou_thre_cat.append(dict_mean(cat_ious))
+
+            iou_thre.append(np.nanmean(ious))
+
+            if "iou" not in sep_cat:
+                sep_cat["iou"] = pd.DataFrame(dict_mean(cat_ious, sep=True))
+            else:
+                sep_cat["iou"] = pd.concat([sep_cat["iou"], pd.DataFrame(dict_mean(cat_ious, sep=True))], axis=0, ignore_index=True)
+
+        argmax = sep_cat["iou"].values.argmax(axis=0)
+        res = pd.DataFrame([threshold_list[argmax], sep_cat["iou"].max().values], columns=sep_cat["iou"].columns)
+        res = pd.concat([res, res.mean(axis=1).rename("mean")], axis=1)
+        res = res.round(3)
+        res.to_csv(opt_th_path, index=False)
+        print(res)
+
+        probs_task = {cat: [] for cat in set(category)}
+        label_task = {cat: [] for cat in set(category)}
+        for i in tqdm(range(len(path_list[:]))):
+            key = str(path_list[i]) + label_text[i]
+            prob = confidence_list[i]
+            probs_task[category[i]].append(prob)
+            label_task[category[i]].append(label_list[i])
+
+        cat_auc = {}
+        for cat in sorted(set(category)):
+            probs = probs_task[cat]
+            label = label_task[cat]
+            probs = np.array(probs)
+            label = np.array(label)
+
+            auc = AUC(np.expand_dims(label, axis=1), np.expand_dims(probs, axis=1))
+            threshold = res[cat].values[0]
+            cat_auc[cat] = [auc]
+        cat_auc["mean"] = [np.mean(list(cat_auc.values()))]
+        df_auc = pd.DataFrame(cat_auc)
+        df_auc = df_auc.round(3)
+        df_auc.to_csv(auc_path, index=False)
+
+    def test_use_opt_th(self, path_list: list, label_text: list, hmaps: list, gtmasks: list, boxes: list, category:list, label_list:list, **kwargs):
+        res = pd.DataFrame()
+        iou_thre = []
+        iou_thre_cat = []
+        split = kwargs["eval_val_or_test"] if "eval_val_or_test" in kwargs else "test"
+        only_pos = kwargs["only_pos"] if "only_pos" in kwargs else False
+        sep_cat = {}
+
+        suffix = "_use_prob" if "use_prob" in kwargs and kwargs["use_prob"] else ""
+        opt_th = pd.read_csv(f"{self.save_dir}/opt_th{suffix}.csv")
+        opt_th_only_pos = pd.read_csv(f"{self.save_dir}/opt_th_only_pos.csv")
+        
+        ious = []
+        cat_ious = {}
+        tp_cat_ious = {}
+        for i in tqdm(range(len(path_list[:]))):
+            cat = category[i]
+            key = str(path_list[i]) + label_text[i]
+            hmap = hmaps[key]["hmap"]
+
+            if self.kwargs["margin"]:
+                hmap = self.set_margin(hmap)
+
+            nan = np.isnan(hmap)
+            gtmask = gtmasks[i]
+            heatmap = norm_heatmap(hmap, nan, mode=1) # [0, 1]
+
+            if "use_prob" in kwargs and kwargs["use_prob"]:
+                prob = hmaps[key]["prob_sfmax"]
+                confidence = prob
+            else:
+                min_v, max_v = 0, 2
+                clip = np.clip(hmap[~nan], min_v, max_v)
+                confidence = np.max((clip - min_v) / (max_v - min_v))
+            confidence_th = opt_th[cat].values[0]
+            if confidence < confidence_th:
+                mask = np.zeros_like(heatmap)
+            else:
+                mask_th = opt_th_only_pos[cat].values[0]
+                mask = np.where(heatmap > mask_th, 1, 0)
+            iou = compute_iou(gtmask, mask, nan, only_pos=only_pos)
+            ious.append(iou)          
+
+            if cat not in cat_ious:
+                cat_ious[cat] = []
+
+            cat_ious[cat].append(iou)
+
+            if cat not in tp_cat_ious:
+                tp_cat_ious[cat] = []
+            if gtmask.sum() > 0 and mask.sum() > 0:
+                tp_cat_ious[cat].append(iou)
+
+        iou_thre_cat.append(dict_mean(cat_ious))
+        iou_thre.append(np.nanmean(ious))
+
+        if "iou" not in sep_cat:
+            sep_cat["iou"] = pd.DataFrame(dict_mean(cat_ious, sep=True))
+        else:
+            sep_cat["iou"] = pd.concat([sep_cat["iou"], pd.DataFrame(dict_mean(cat_ious, sep=True))], axis=0, ignore_index=True)
+
+        res["iou"] = iou_thre
+        res["iou_cat"] = iou_thre_cat
+
+        sep_cat["iou"].rename(columns=prefix("iou_", sep_cat["iou"].columns), inplace=True)
+
+        # concat
+        for k, v in sep_cat.items():
+            res = pd.concat([res, v], axis=1)
+
+        res = res.round(3)
+        if only_pos:
+            suffix = "_only_pos"
+        else:
+            suffix = "_use_prob" if "use_prob" in kwargs and kwargs["use_prob"] else ""
+        metric_df = to_metric_df(cat_ious)    
+        bootci(metric_df, self.save_dir, f"iou{suffix}")
+        res.to_csv(f"{self.save_dir}/metric_opt_th_{split}{suffix}.csv", index=False)
+        print(res)
+        print(f"{self.save_dir}/metric_opt_th_{split}{suffix}.csv")
 
 
 def dict_mean(d: dict, sep=False):
@@ -355,7 +607,6 @@ def dict_mean(d: dict, sep=False):
     res = []
     for k, v in d.items():
         res.append(np.nanmean(v))
-        # print(k, len(v))
     return np.nanmean(res)
 
 

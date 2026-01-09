@@ -1,11 +1,9 @@
 import torch
-import torch.nn as nn
 import torchvision.transforms as transforms
-
 from . import models
 from . import lightning
 from . import datasets
-from typing import Union, List
+from typing import Union
 
 
 def load_model(
@@ -33,7 +31,7 @@ def load_model(
         return model
 
     # Load the state dictionary into the model
-    model.load_state_dict(ckpt_dict)
+    model.load_state_dict(ckpt_dict, strict=False)
 
     return model
 
@@ -174,39 +172,6 @@ def build_transformation(cfg, split):
         elif cfg.transforms.random_crop is not None:
             t.append(transforms.RandomCrop(cfg.transforms.random_crop.crop_size))
             print("Random crop with size {}".format(cfg.transforms.random_crop.crop_size))
-
-        if cfg.transforms.random_horizontal_flip is True:
-            t.append(
-                transforms.RandomHorizontalFlip(p=cfg.transforms.random_horizontal_flip)
-            )
-            print("Random horizontal flip with p {}".format(cfg.transforms.random_horizontal_flip))
-
-        if cfg.transforms.random_affine is not None:
-            t.append(
-                transforms.RandomAffine(
-                    cfg.transforms.random_affine.degrees,
-                    translate=[*cfg.transforms.random_affine.translate],
-                    scale=[*cfg.transforms.random_affine.scale],
-                )
-            )
-            print("Random affine with degrees {}, translate {} and scale {}".format(
-                cfg.transforms.random_affine.degrees,
-                cfg.transforms.random_affine.translate,
-                cfg.transforms.random_affine.scale
-            ))
-
-        if cfg.transforms.color_jitter is not None:
-            t.append(
-                transforms.ColorJitter(
-                    brightness=[*cfg.transforms.color_jitter.brightness],
-                    contrast=[*cfg.transforms.color_jitter.contrast],
-                )
-            )
-            print("Color jitter with brightness {} and contrast {}".format(
-                cfg.transforms.color_jitter.brightness,
-                cfg.transforms.color_jitter.contrast
-            ))
-
     else:
         if cfg.transforms.random_crop is not None:
             t.append(transforms.CenterCrop(cfg.transforms.random_crop.crop_size))

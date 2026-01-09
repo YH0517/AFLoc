@@ -224,7 +224,6 @@ class BertEncoder(nn.Module):
         
         # loop over batch
         for embs, sts in zip(embeddings, report):
-            # embs: [97, 4, 768] sts: [97]
             agg_embs = []
             words = []
             cap = np.array(sts)

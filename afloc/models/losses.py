@@ -122,41 +122,40 @@ def local_loss(
     for i in range(words_emb.shape[0]):
 
         # Get the i-th text description
-        words_num = cap_lens[i]  # 25
-        # TODO: remove [SEP]
-        # word = words_emb[i, :, 1:words_num+1].unsqueeze(0).contiguous()    # [1, 768, 25]
-        word = words_emb[i, :, :words_num].unsqueeze(0).contiguous()  # [1, 768, 25]
-        word = word.repeat(batch_size, 1, 1)  # [48, 768, 25]
-        context = img_features  # [48, 768, 19, 19]
+        words_num = cap_lens[i] 
+        # word = words_emb[i, :, 1:words_num+1].unsqueeze(0).contiguous()    
+        word = words_emb[i, :, :words_num].unsqueeze(0).contiguous()  
+        word = word.repeat(batch_size, 1, 1) 
+        context = img_features  
 
         weiContext, attn = attention_fn(
             word, context, temp1
-        )  # [48, 768, 25], [48, 25, 19, 19]
+        )  
 
         att_maps.append(
             attn[i].unsqueeze(0).contiguous()
-        )  # add attention for curr index  [25, 19, 19]
-        word = word.transpose(1, 2).contiguous()  # [48, 25, 768]
-        weiContext = weiContext.transpose(1, 2).contiguous()  # [48, 25, 768]
+        )  # add attention for curr index  
+        word = word.transpose(1, 2).contiguous()  
+        weiContext = weiContext.transpose(1, 2).contiguous() 
 
-        word = word.view(batch_size * words_num, -1)  # [1200, 768]
-        weiContext = weiContext.view(batch_size * words_num, -1)  # [1200, 768]
+        word = word.view(batch_size * words_num, -1)  
+        weiContext = weiContext.view(batch_size * words_num, -1) 
 
         row_sim = cosine_similarity(word, weiContext)
-        row_sim = row_sim.view(batch_size, words_num)  # [48, 25]
+        row_sim = row_sim.view(batch_size, words_num)  
 
         row_sim.mul_(temp2).exp_()
         if agg == "sum":
-            row_sim = row_sim.sum(dim=1, keepdim=True)  # [48, 1]
+            row_sim = row_sim.sum(dim=1, keepdim=True)
         else:
-            row_sim = row_sim.mean(dim=1, keepdim=True)  # [48, 1]
+            row_sim = row_sim.mean(dim=1, keepdim=True)
         row_sim = torch.log(row_sim)
 
         similarities.append(row_sim)
 
-    similarities = torch.cat(similarities, 1)  #
+    similarities = torch.cat(similarities, 1)
     similarities = similarities * temp3
-    similarities1 = similarities.transpose(0, 1)  # [48, 48]
+    similarities1 = similarities.transpose(0, 1)
 
     labels = Variable(torch.LongTensor(range(batch_size))).to(similarities.device)
     if weight_matrix is not None:
@@ -168,7 +167,7 @@ def local_loss(
         loss0 /= batch_size
         loss1 /= batch_size
     else:
-        loss0 = nn.CrossEntropyLoss()(similarities, labels)  # labels: arange(batch_size)
+        loss0 = nn.CrossEntropyLoss()(similarities, labels)
         loss1 = nn.CrossEntropyLoss()(similarities1, labels)
     return loss0, loss1, att_maps
 

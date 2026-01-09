@@ -8,7 +8,6 @@ import pickle
 import numpy.random as random
 import torch
 import torch.utils.data as data
-
 from PIL import Image
 from nltk.tokenize import RegexpTokenizer
 from transformers import AutoTokenizer
@@ -50,7 +49,7 @@ class MultimodalPretrainingDataset(data.Dataset):
                 MIMIC_IMPRESSION_COL: PRETRAIN_IMPRESSION_COL}, inplace=True)
 
             self.df = pd.concat([self.df, self.df_mimic])
-            self.precess_missing_values(mode=cfg.data.missing_value_mode)
+            # self.precess_missing_values(mode=cfg.data.missing_value_mode)
                  
         # load studies and study to text mapping
         self.filenames, self.path2sent, self.impression_num = self.load_text_data(split, self.cfg.data.view, "_".join(self.cfg.data.dataset))
@@ -249,7 +248,7 @@ class MultimodalPretrainingDataset(data.Dataset):
         Returns:
             img: The image.
         """
-        if self.cfg.data.image.equalize_hist:
+        if "equalize_hist" in self.cfg.data.image and self.cfg.data.image.equalize_hist:
             img = self.read_img(img_path)
         else:
             x = cv2.imread(str(img_path), 0)

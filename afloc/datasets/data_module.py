@@ -1,6 +1,4 @@
 import pytorch_lightning as pl
-import torchvision.transforms as transforms
-
 from torch.utils.data import DataLoader
 from . import pretraining_dataset
 from .. import builder

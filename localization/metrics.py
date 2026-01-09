@@ -1,5 +1,6 @@
 import numpy as np
-from eval.utils import norm_heatmap
+from localization.datasets import norm_heatmap
+from sklearn.metrics import f1_score, roc_auc_score
 
 
 def compute_iou(gtmask_, premask_, nan, only_pos=True):
@@ -32,6 +33,36 @@ def compute_iou(gtmask_, premask_, nan, only_pos=True):
     return iou_score
 
 
+# compute dice
+def compute_dice(gtmask_, premask_, nan, only_pos=True):
+    """
+    Compute dice between ground truth mask and predicted mask.
+    
+    Inputs:
+        - gtmask_ (np.ndarray): shape=(H, W), ground truth mask
+        - premask_ (np.ndarray): shape=(H, W), predicted mask
+        - nan (np.ndarray): shape=(H, W), True if the pixel is NaN
+        - only_pos (bool): if True, compute dice only for positive pixels
+
+    Returns:
+        - dice_score (float): dice score
+    """
+    gtmask = gtmask_[~nan]
+    premask = premask_[~nan]
+    intersection = np.logical_and(gtmask, premask)
+    union = np.logical_or(gtmask, premask)
+    if only_pos:
+        if np.sum(premask) == 0 or np.sum(gtmask) == 0:
+            dice_score = np.nan
+        else:
+            dice_score = 2 * np.sum(intersection) / (np.sum(premask) + np.sum(gtmask))
+    else:
+        if np.sum(union) == 0:
+            dice_score = np.nan
+        else:
+            dice_score = 2 * np.sum(intersection) / (np.sum(premask) + np.sum(gtmask))
+    return dice_score
+
 def compute_cnr(gtmask_, heatmap_, nan):
     """
     Compute contrast-to-noise ratio (CNR) between ground truth mask and heatmap.
@@ -61,3 +92,7 @@ def compute_cnr(gtmask_, heatmap_, nan):
     else:
         CNR = (meanA - meanA_) / pow((varA + varA_), 0.5)
     return CNR
+
+def AUC(label, pred):
+    rlt = roc_auc_score(label, pred)
+    return rlt

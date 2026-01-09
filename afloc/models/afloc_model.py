@@ -3,16 +3,12 @@ import torch.nn as nn
 import cv2
 import re
 import numpy as np
-from sklearn import metrics
-
 from PIL import Image
 from .. import builder
 from . import losses
 from transformers import AutoTokenizer
 from nltk.tokenize import RegexpTokenizer
-import os
 from skimage import exposure
-import torch.nn.functional as F
 
 
 class AFLoc(nn.Module):
@@ -34,7 +30,6 @@ class AFLoc(nn.Module):
         self.temp1 = self.cfg.model.afloc.temp1
         self.temp2 = self.cfg.model.afloc.temp2
         self.temp3 = self.cfg.model.afloc.temp3
-        self.batch_size = self.cfg.train.batch_size
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type)
         self.ixtoword = {v: k for k, v in self.tokenizer.get_vocab().items()}
@@ -62,20 +57,8 @@ class AFLoc(nn.Module):
         return res
 
     def image_encoder_forward(self, imgs):
-        """
-        Forward pass for the image encoder
-
-        Inputs: 
-            imgs (torch.Tensor): input images (batch_size, channel, height, width)
-
-        Returns:
-            img_emb_l (torch.Tensor): local image embeddings (batch_size, 768, 19, 19)
-            img_emb_l2 (torch.Tensor): local image embeddings 2 (batch_size, 768, 38, 38)
-            img_emb_lf (torch.Tensor): local image embeddings final (batch_size, 768, 10, 10)
-            img_emb_g (torch.Tensor): global image embeddings (batch_size, 768)
-        """
         # get image features
-        img_feat_g, img_feat_l, img_feat_l2, img_feat_lf = self.img_encoder(imgs, get_local=True)  # [b, 2048] [b, 1024, 19, 19]
+        img_feat_g, img_feat_l, img_feat_l2, img_feat_lf = self.img_encoder(imgs, get_local=True)
         # map image features to the same dimension of text embeddings.
         img_emb_g, img_emb_l, img_emb_l2, img_emb_lf = self.img_encoder.generate_embeddings(
             img_feat_g, img_feat_l, img_feat_l2, img_feat_lf
@@ -150,14 +133,14 @@ class AFLoc(nn.Module):
             - sent_units_report (list): an auxiliary sentence list
         """
         
-        img_emb_l = output["img_emb_l"]  # local image embeddings (batch_size, 768, 19, 19)
-        img_emb_l2 = output["img_emb_l2"]  # local image embeddings 2 (batch_size, 768, 38, 38)
-        img_emb_g = output["img_emb_g"]  # global image embeddings (batch_size, 768)
-        text_emb_w = output["text_emb_w"]  # word-level text embeddings (batch_size, 768, max_length)
-        text_emb_r = output["text_emb_r"]  # report-level text embeddings (batch_size, 768)
-        report = output["report"]  # text report
-        text_emb_s = output["text_emb_s"]  # sentence-level text embeddings (batch_size, 768, num_sentences)
-        sent_units_report = output["sent_units_report"]  # auxiliary sentence list
+        img_emb_l = output["img_emb_l"]
+        img_emb_l2 = output["img_emb_l2"]
+        img_emb_g = output["img_emb_g"]
+        text_emb_w = output["text_emb_w"]
+        text_emb_r = output["text_emb_r"]
+        report = output["report"]
+        text_emb_s = output["text_emb_s"]
+        sent_units_report = output["sent_units_report"]
 
         # global-level loss
         if self.cfg.model.afloc.use_global_report_loss:
@@ -201,25 +184,6 @@ class AFLoc(nn.Module):
         return res
 
     def forward(self, x):
-        """
-        Forward pass
-
-        Inputs:
-            x (dict): input data
-
-        Returns:
-            res (dict): model output
-            - img_emb_l (torch.Tensor): local image embeddings (batch_size, 768, 19, 19)
-            - img_emb_l2 (torch.Tensor): local image embeddings 2 (batch_size, 768, 38, 38)
-            - img_emb_lf (torch.Tensor): local image embeddings final (batch_size, 768, 10, 10)
-            - img_emb_g (torch.Tensor): global image embeddings (batch_size, 768)
-            - text_emb_w (torch.Tensor): word-level text embeddings (batch_size, 768, max_length)
-            - text_emb_r (torch.Tensor): report-level text embeddings (batch_size, 768)
-            - text_emb_s (torch.Tensor): sentence-level text embeddings (batch_size, 768, num_sentences)
-            - report (list): text report
-            - sent_units_report (list): an auxiliary sentence list
-        """
-
         # img encoder branch
         img_emb_l, img_emb_l2, img_emb_lf, img_emb_g = self.image_encoder_forward(x["imgs"])
 
@@ -330,7 +294,7 @@ class AFLoc(nn.Module):
         }
 
 
-    def process_img(self, paths, device, equalize_hist=False):
+    def process_img(self, paths, device, equalize_hist=False, flag=0):
         """
         Process image data
 
@@ -350,10 +314,11 @@ class AFLoc(nn.Module):
         all_imgs = []
         for p in paths:
 
-            x = cv2.imread(str(p), 0)
+            x = cv2.imread(str(p), flag)
 
             # tranform images
-            x = self._resize_img(x, self.cfg.data.image.imsize)
+            if flag == 0:
+                x = self._resize_img(x, self.cfg.data.image.imsize)
             if equalize_hist:
                 x = np.array(x) / 255.
                 x = exposure.equalize_hist(x)

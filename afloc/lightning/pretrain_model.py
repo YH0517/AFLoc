@@ -1,7 +1,4 @@
-import torch
-
 from .. import builder
-
 from pytorch_lightning.core import LightningModule
 
 
@@ -16,7 +13,7 @@ class PretrainModel(LightningModule):
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
         # load model
-        if self.cfg.train.load_ckpt is not None:
+        if "load_ckpt" in self.cfg.train and self.cfg.train.load_ckpt is not None:
             self.afloc = builder.build_model_from_ckpt(self.cfg.train.load_ckpt)
         else:
             self.afloc = builder.build_model(cfg)
