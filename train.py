@@ -23,8 +23,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-os.environ["WANDB_API_KEY"] = "a197e197fb37efa742dd0668e1608a5349aaa0ce"
-os.environ["WANDB_MODE"] = "offline"
+
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument(
